@@ -13,33 +13,67 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.aiimagebox.databinding.ActivityMainBinding
+import com.aiimagebox.data.AppDirectories
 import com.aiimagebox.data.ChannelStore
+import com.aiimagebox.data.AttemptRecord as StoredAttemptRecord
+import com.aiimagebox.data.GeneratedAsset as StoredGeneratedAsset
+import com.aiimagebox.data.GenerationMode as StoredGenerationMode
+import com.aiimagebox.data.GenerationStatus as StoredGenerationStatus
+import com.aiimagebox.data.GenerationStore
+import com.aiimagebox.data.GenerationTask
+import com.aiimagebox.data.MediaReference as StoredMediaReference
 import com.aiimagebox.data.ProviderChannel
 import com.aiimagebox.data.SecureKeyStore
+import com.aiimagebox.generation.GenerationEvent
+import com.aiimagebox.generation.GenerationManager
+import com.aiimagebox.generation.GenerationParameters
+import com.aiimagebox.generation.GenerationRequest
+import com.aiimagebox.generation.GenerationTarget
+import com.aiimagebox.provider.ProviderRegistry
+import com.aiimagebox.ui.StudioForm
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.navigation.NavigationBarView
 import com.google.android.material.switchmaterial.SwitchMaterial
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+    private lateinit var appDirectories: AppDirectories
     private lateinit var channelStore: ChannelStore
+    private lateinit var generationStore: GenerationStore
+    private lateinit var generationManager: GenerationManager
     private var currentTab: Tab = Tab.STUDIO
     private var syncingNav = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        channelStore = ChannelStore((application as AIImageBoxApp).appDirectories)
+        appDirectories = (application as AIImageBoxApp).appDirectories
+        channelStore = ChannelStore(appDirectories)
+        generationStore = GenerationStore(appDirectories)
+        generationManager = GenerationManager()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         currentTab = Tab.fromId(savedInstanceState?.getInt(KEY_TAB) ?: R.id.nav_studio)
         wireNavigation()
+        wireStudioForm()
+        observeGenerationEvents()
         render(currentTab)
+    }
+
+    override fun onDestroy() {
+        generationManager.close()
+        super.onDestroy()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -88,7 +122,301 @@ class MainActivity : AppCompatActivity() {
         binding.secondaryAction.visibility = if (tab == Tab.CHANNELS) View.VISIBLE else View.GONE
         binding.secondaryAction.text = getString(R.string.action_refresh_channels)
         binding.channelPanel.visibility = if (tab == Tab.CHANNELS) View.VISIBLE else View.GONE
+        binding.studioForm.visibility = if (tab == Tab.STUDIO) View.VISIBLE else View.GONE
+        binding.taskPanel.visibility = if (tab == Tab.TASKS) View.VISIBLE else View.GONE
+        binding.historyPanel.visibility = if (tab == Tab.HISTORY) View.VISIBLE else View.GONE
+        if (tab == Tab.STUDIO) bindStudioChannels()
+        if (tab == Tab.TASKS) renderTaskPanel()
+        if (tab == Tab.HISTORY) renderHistoryPanel()
         if (tab == Tab.CHANNELS) renderChannelList()
+    }
+
+    private fun wireStudioForm() {
+        binding.studioForm.setOnSubmitListener { request ->
+            submitStudioRequest(request)
+        }
+    }
+
+    private fun bindStudioChannels() {
+        binding.studioForm.bindChannels(channelStore.load())
+    }
+
+    private fun submitStudioRequest(request: StudioForm.StudioSubmitRequest) {
+        val channel = channelStore.load().firstOrNull { it.id == request.channelId && it.enabled }
+        if (channel == null) {
+            binding.studioForm.setStatus(getString(R.string.studio_generate_no_channel))
+            return
+        }
+
+        val generationRequest = GenerationRequest(
+            prompt = request.prompt,
+            target = GenerationTarget.fromChannel(channel, request.model),
+            parameters = GenerationParameters(
+                aspectRatio = request.aspectRatio,
+                resolution = imageSize(request.resolution, request.aspectRatio),
+                count = request.quantity,
+                responseFormat = "b64_json",
+            ),
+        )
+        generationStore.createTask(
+            GenerationTask(
+                id = generationRequest.id,
+                mode = StoredGenerationMode.IMAGE,
+                status = StoredGenerationStatus.QUEUED,
+                prompt = request.prompt,
+                channelId = channel.id,
+                channelName = channel.name,
+                providerType = channel.providerType,
+                model = request.model.ifBlank { channel.defaultModel },
+                parametersJson = JSONObject()
+                    .put("aspect_ratio", request.aspectRatio)
+                    .put("resolution", imageSize(request.resolution, request.aspectRatio))
+                    .put("count", request.quantity)
+                    .toString(),
+            ),
+        )
+        binding.studioForm.setSubmitting(true)
+        binding.studioForm.setStatus(getString(R.string.studio_generate_enqueued, generationRequest.id.take(8)))
+        generationManager.enqueue(generationRequest)
+    }
+
+    private fun observeGenerationEvents() {
+        lifecycleScope.launch {
+            generationManager.events.collect { event ->
+                handleGenerationEvent(event)
+            }
+        }
+    }
+
+    private suspend fun handleGenerationEvent(event: GenerationEvent) {
+        when (event) {
+            is GenerationEvent.Enqueued -> Unit
+            is GenerationEvent.Started -> {
+                withContext(Dispatchers.IO) {
+                    generationStore.updateTask(event.requestId) {
+                        it.copy(status = StoredGenerationStatus.RUNNING, startedAt = System.currentTimeMillis())
+                    }
+                }
+                renderTaskPanel()
+                binding.studioForm.setSubmitting(true)
+                binding.studioForm.setStatus(
+                    getString(
+                        R.string.studio_generate_started,
+                        event.item.request.target.channelName.ifBlank { event.item.request.target.channelId },
+                        event.item.request.target.model,
+                    ),
+                )
+            }
+            is GenerationEvent.Succeeded -> {
+                val savedPath = withContext(Dispatchers.IO) {
+                    saveGenerationSuccess(event)
+                }
+                renderTaskPanel()
+                renderHistoryPanel()
+                binding.studioForm.setSubmitting(false)
+                binding.studioForm.setResultPlaceholder(getString(R.string.studio_generate_succeeded, savedPath))
+                binding.studioForm.setStatus(getString(R.string.studio_generate_succeeded, savedPath))
+            }
+            is GenerationEvent.Failed -> {
+                withContext(Dispatchers.IO) {
+                    val updated = generationStore.updateTask(event.requestId) {
+                        it.copy(
+                            status = StoredGenerationStatus.FAILED,
+                            errorMessage = event.error.message ?: event.error::class.java.simpleName,
+                            completedAt = System.currentTimeMillis(),
+                            attempts = it.attempts + storedAttempt(event, StoredGenerationStatus.FAILED, event.error.message ?: ""),
+                        )
+                    }
+                    if (updated != null) generationStore.appendRecord(updated)
+                }
+                renderTaskPanel()
+                renderHistoryPanel()
+                binding.studioForm.setSubmitting(false)
+                binding.studioForm.setStatus(
+                    getString(R.string.studio_generate_failed, event.error.message ?: event.error::class.java.simpleName),
+                )
+            }
+            is GenerationEvent.Cancelled -> {
+                withContext(Dispatchers.IO) {
+                    val updated = generationStore.updateTask(event.requestId) {
+                        it.copy(
+                            status = StoredGenerationStatus.CANCELED,
+                            errorMessage = event.reason.orEmpty(),
+                            completedAt = System.currentTimeMillis(),
+                        )
+                    }
+                    if (updated != null) generationStore.appendRecord(updated)
+                }
+                renderTaskPanel()
+                renderHistoryPanel()
+                binding.studioForm.setSubmitting(false)
+                binding.studioForm.setStatus(getString(R.string.studio_generate_cancelled, event.reason.orEmpty()))
+            }
+        }
+    }
+
+    private fun saveGenerationSuccess(event: GenerationEvent.Succeeded): String {
+        val request = event.item.request
+        val result = event.result
+        val ext = extensionForMime(result.mimeType)
+        val file = File(appDirectories.generatedImages, "image_${System.currentTimeMillis()}_${request.id.take(8)}.$ext")
+        file.writeBytes(result.bytes)
+        val asset = StoredGeneratedAsset(
+            mode = StoredGenerationMode.IMAGE,
+            media = StoredMediaReference(
+                filePath = file.absolutePath,
+                mimeType = result.mimeType,
+                displayName = file.name,
+                sizeBytes = result.bytes.size.toLong(),
+            ),
+            channelId = request.target.channelId,
+            channelName = request.target.channelName,
+            providerType = request.target.providerType,
+            model = request.target.model,
+            metadataJson = JSONObject(result.metadata).toString(),
+        )
+        val updated = generationStore.updateTask(request.id) {
+            it.copy(
+                status = StoredGenerationStatus.SUCCEEDED,
+                assets = it.assets + asset,
+                attempts = it.attempts + storedAttempt(event, StoredGenerationStatus.SUCCEEDED, ""),
+                completedAt = System.currentTimeMillis(),
+            )
+        }
+        if (updated != null) generationStore.appendRecord(updated)
+        return file.absolutePath
+    }
+
+    private fun storedAttempt(
+        event: GenerationEvent,
+        status: StoredGenerationStatus,
+        error: String,
+    ): StoredAttemptRecord {
+        val item = when (event) {
+            is GenerationEvent.Succeeded -> event.item
+            is GenerationEvent.Failed -> event.item
+            is GenerationEvent.Cancelled -> event.item
+            is GenerationEvent.Enqueued -> event.item
+            is GenerationEvent.Started -> event.item
+        }
+        val now = System.currentTimeMillis()
+        return StoredAttemptRecord(
+            taskId = item.request.id,
+            attemptNumber = 1,
+            status = status,
+            channelId = item.request.target.channelId,
+            channelName = item.request.target.channelName,
+            providerType = item.request.target.providerType,
+            model = item.request.target.model,
+            errorMessage = error,
+            startedAt = item.startedAtMillis ?: now,
+            endedAt = now,
+            durationMs = (item.startedAtMillis ?: now).let { now - it },
+        )
+    }
+
+    private fun imageSize(resolution: String, aspectRatio: String): String {
+        val longSide = resolution.toIntOrNull()?.coerceIn(256, 4096) ?: 1024
+        val (width, height) = when (aspectRatio) {
+            "3:4" -> (longSide * 3 / 4) to longSide
+            "4:3" -> longSide to (longSide * 3 / 4)
+            "16:9" -> longSide to (longSide * 9 / 16)
+            else -> longSide to longSide
+        }
+        return "${width}x${height}"
+    }
+
+    private fun extensionForMime(mimeType: String): String {
+        return when (mimeType.lowercase().substringBefore(';')) {
+            "image/jpeg", "image/jpg" -> "jpg"
+            "image/webp" -> "webp"
+            "image/gif" -> "gif"
+            else -> "png"
+        }
+    }
+
+    private fun renderTaskPanel() {
+        val state = generationManager.snapshot()
+        binding.taskSummary.text = getString(
+            R.string.task_summary,
+            state.queuedCount,
+            state.runningCount,
+            state.succeededCount,
+            state.failedCount,
+            state.cancelledCount,
+        )
+        binding.taskEmpty.visibility = if (state.items.isEmpty()) View.VISIBLE else View.GONE
+        binding.taskList.removeAllViews()
+        state.items.asReversed().forEach { item ->
+            binding.taskList.addView(
+                simpleCard(
+                    title = item.request.prompt.take(80).ifBlank { item.request.id.take(8) },
+                    detail = getString(
+                        R.string.task_card_detail,
+                        item.request.target.channelName.ifBlank { item.request.target.channelId },
+                        item.request.target.model,
+                        item.status.name,
+                        item.resultByteCount?.let { "$it bytes" } ?: "-",
+                    ),
+                ),
+            )
+        }
+    }
+
+    private fun renderHistoryPanel() {
+        val records = generationStore.listRecentRecords(20)
+        binding.historySummary.text = getString(R.string.history_summary, records.size)
+        binding.historyEmpty.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
+        binding.historyList.removeAllViews()
+        records.forEach { record ->
+            val filePath = record.assets.firstOrNull()?.media?.filePath.orEmpty().ifBlank { "-" }
+            binding.historyList.addView(
+                simpleCard(
+                    title = record.prompt.take(80).ifBlank { record.taskId.take(8) },
+                    detail = getString(
+                        R.string.history_card_detail,
+                        record.channelName.ifBlank { record.channelId },
+                        record.model,
+                        record.status.wireName,
+                        filePath,
+                        record.errorMessage.ifBlank { "-" },
+                    ),
+                ),
+            )
+        }
+    }
+
+    private fun simpleCard(title: String, detail: String): View {
+        val card = MaterialCardView(this).apply {
+            setCardBackgroundColor(color(R.color.aib_surface))
+            strokeColor = color(R.color.aib_line)
+            strokeWidth = dp(1)
+            radius = dp(8).toFloat()
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(10)
+            }
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+        }
+        content.addView(TextView(this).apply {
+            text = title
+            setTextColor(color(R.color.aib_text))
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        content.addView(TextView(this).apply {
+            text = detail
+            setTextColor(color(R.color.aib_text_secondary))
+            textSize = 14f
+            setPadding(0, dp(7), 0, 0)
+        })
+        card.addView(content)
+        return card
     }
 
     private fun renderChannelList() {
@@ -149,13 +477,16 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, dp(12), 0, 0)
         }
         row.addView(actionButton(R.string.action_edit) { showChannelDialog(channel) })
+        row.addView(actionButton(R.string.action_test_models) { testChannelModels(channel) })
         row.addView(actionButton(if (channel.enabled) R.string.action_disable else R.string.action_enable) {
             channelStore.setEnabled(channel.id, !channel.enabled)
             renderChannelList()
+            bindStudioChannels()
         })
         row.addView(actionButton(R.string.action_copy) {
             channelStore.duplicate(channel.id)
             renderChannelList()
+            bindStudioChannels()
         })
         row.addView(actionButton(R.string.action_delete) { confirmDelete(channel) })
         return row
@@ -183,8 +514,49 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(R.string.action_delete) { _, _ ->
                 channelStore.delete(channel.id)
                 renderChannelList()
+                bindStudioChannels()
             }
             .show()
+    }
+
+    private fun testChannelModels(channel: ProviderChannel) {
+        val adapter = ProviderRegistry.forChannel(channel)
+        if (adapter == null) {
+            Toast.makeText(this, getString(R.string.channel_test_no_adapter, channel.providerType), Toast.LENGTH_LONG).show()
+            return
+        }
+        Toast.makeText(this, getString(R.string.channel_test_running, channel.name), Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { adapter.listModels(channel) }
+            if (!result.success) {
+                MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle(R.string.channel_test_failed_title)
+                    .setMessage(result.error.ifBlank { result.rawPreview })
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+                return@launch
+            }
+            val modelsText = result.models
+                .take(50)
+                .joinToString("\n") { it.id }
+                .ifBlank { "-" }
+            val message = if (result.models.isEmpty()) {
+                getString(R.string.channel_test_empty, result.httpStatus?.toString() ?: "-", result.elapsedMillis)
+            } else {
+                getString(
+                    R.string.channel_test_models,
+                    result.httpStatus?.toString() ?: "-",
+                    result.elapsedMillis,
+                    result.models.size,
+                    modelsText,
+                )
+            }
+            MaterialAlertDialogBuilder(this@MainActivity)
+                .setTitle(R.string.channel_test_success_title)
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+        }
     }
 
     private fun showChannelDialog(existing: ProviderChannel?) {
@@ -302,6 +674,7 @@ class MainActivity : AppCompatActivity() {
         channelStore.upsert(channel)
         dialog.dismiss()
         renderChannelList()
+        bindStudioChannels()
     }
 
     private fun editText(labelRes: Int, value: String): EditText {

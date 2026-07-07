@@ -40,6 +40,8 @@
 
 ## 0.3.0 文生图
 
+状态：初版已完成。已接入 `StudioForm` 创作表单、`GenerationManager` 队列、`GenerationStore` 任务/历史持久化、OpenAI-compatible `/v1/images/generations` 文生图、结果图片落盘、任务页队列状态、历史页最近记录和渠道模型列表测试。
+
 目标：完成第一条端到端生成链路。
 
 - OpenAI-compatible image adapter。
@@ -141,7 +143,7 @@
 
 ## 当前下一步
 
-1. 开始 0.2.1 渠道测试和模型列表。
-2. 实现 OpenAI-compatible `/v1/models` 拉取。
-3. 增加渠道测试结果、HTTP 错误预览和脱敏显示。
-4. 为 0.3.0 文生图 adapter 准备 `ProviderAdapter` 和 `ProviderRegistry`。
+1. 开始 0.3.1 真机回归和接口实测。
+2. 修复渠道测试、文生图提交、任务/历史刷新和图片落盘中的真机问题。
+3. 为历史页补图片缩略图和“复用参数”入口。
+4. 为 0.4.0 图生图准备参考图选择和 `images/edits` adapter。

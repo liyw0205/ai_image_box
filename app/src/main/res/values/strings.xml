@@ -68,8 +68,30 @@
 
     <string name="action_save">保存</string>
     <string name="action_edit">编辑</string>
+    <string name="action_test_models">测试</string>
     <string name="action_disable">禁用</string>
     <string name="action_enable">启用</string>
     <string name="action_copy">复制</string>
     <string name="action_delete">删除</string>
+
+    <string name="channel_test_no_adapter">当前 provider 类型暂不支持测试：%1$s</string>
+    <string name="channel_test_running">正在测试“%1$s”的模型列表。</string>
+    <string name="channel_test_failed_title">渠道测试失败</string>
+    <string name="channel_test_success_title">渠道测试成功</string>
+    <string name="channel_test_empty">接口连通，但没有返回模型列表。\nHTTP：%1$s\n耗时：%2$d ms</string>
+    <string name="channel_test_models">HTTP：%1$s\n耗时：%2$d ms\n模型数：%3$d\n\n%4$s</string>
+
+    <string name="studio_generate_no_channel">渠道不存在或已被删除。</string>
+    <string name="studio_generate_enqueued">任务已加入队列：%1$s</string>
+    <string name="studio_generate_started">正在调用 %1$s / %2$s。</string>
+    <string name="studio_generate_succeeded">生成成功，已保存：%1$s</string>
+    <string name="studio_generate_failed">生成失败：%1$s</string>
+    <string name="studio_generate_cancelled">任务已取消：%1$s</string>
+
+    <string name="task_summary">队列：%1$d，运行：%2$d，成功：%3$d，失败：%4$d，取消：%5$d。</string>
+    <string name="task_empty">当前没有队列任务。从创作页提交后会显示实时状态。</string>
+    <string name="task_card_detail">目标：%1$s / %2$s\n状态：%3$s\n结果大小：%4$s</string>
+    <string name="history_summary">最近 %1$d 条生成记录。</string>
+    <string name="history_empty">暂无生成历史。成功或失败的任务都会写入这里。</string>
+    <string name="history_card_detail">目标：%1$s / %2$s\n状态：%3$s\n文件：%4$s\n错误：%5$s</string>
 </resources>

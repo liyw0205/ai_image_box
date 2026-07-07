@@ -1,0 +1,405 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/studioFormRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/studioTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/studio_form_title"
+        android:textColor="@color/aib_text"
+        android:textSize="24sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/studioSubtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:lineSpacingExtra="3dp"
+        android:text="@string/studio_form_subtitle"
+        android:textColor="@color/aib_text_secondary"
+        android:textSize="15sp" />
+
+    <LinearLayout
+        android:id="@+id/studioPromptPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:background="@drawable/bg_input_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/studioPromptTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/studio_prompt_title"
+            android:textColor="@color/aib_text"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/studioPromptLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="@string/studio_prompt_hint"
+            app:boxBackgroundColor="@color/aib_surface2"
+            app:boxBackgroundMode="outline"
+            app:boxCornerRadiusBottomEnd="8dp"
+            app:boxCornerRadiusBottomStart="8dp"
+            app:boxCornerRadiusTopEnd="8dp"
+            app:boxCornerRadiusTopStart="8dp"
+            app:boxStrokeColor="@color/aib_primary"
+            app:hintTextColor="@color/aib_hint">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/studioPromptInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="top|start"
+                android:importantForAutofill="no"
+                android:inputType="textMultiLine|textCapSentences"
+                android:lineSpacingExtra="3dp"
+                android:minLines="5"
+                android:textColor="@color/aib_text"
+                android:textColorHint="@color/aib_hint"
+                android:textSize="15sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            android:id="@+id/studioPromptHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/studio_prompt_counter_hint"
+            android:textColor="@color/aib_text_secondary"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/studioChannelPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_input_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/studioChannelTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/studio_channel_title"
+                android:textColor="@color/aib_text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/studioNextTargetButton"
+                style="@style/Widget.AIImageBox.Button.Secondary"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="72dp"
+                android:text="@string/studio_channel_next"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/studioChannelName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/aib_text"
+            android:textSize="16sp"
+            tools:text="默认渠道 · gpt-image-1" />
+
+        <TextView
+            android:id="@+id/studioChannelMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/aib_text_secondary"
+            android:textSize="14sp"
+            tools:text="类型：openai_compatible_image" />
+
+        <TextView
+            android:id="@+id/studioChannelEndpoint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/aib_text_secondary"
+            android:textSize="13sp"
+            tools:text="接口：https://example.local/v1/images" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/studioSettingsPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_input_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/studioSettingsTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/studio_settings_title"
+            android:textColor="@color/aib_text"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/studioAspectTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="@string/studio_aspect_title"
+            android:textColor="@color/aib_text_secondary"
+            android:textSize="14sp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/studioAspectGroup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/studioAspectSquare"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="72dp"
+                    android:layout_height="42dp"
+                    android:text="@string/studio_aspect_square" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/studioAspectPortrait"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="72dp"
+                    android:layout_height="42dp"
+                    android:text="@string/studio_aspect_portrait" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/studioAspectLandscape"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="72dp"
+                    android:layout_height="42dp"
+                    android:text="@string/studio_aspect_landscape" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/studioAspectWide"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="72dp"
+                    android:layout_height="42dp"
+                    android:text="@string/studio_aspect_wide" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </HorizontalScrollView>
+
+        <TextView
+            android:id="@+id/studioResolutionTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="@string/studio_resolution_title"
+            android:textColor="@color/aib_text_secondary"
+            android:textSize="14sp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/studioResolutionGroup"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/studioResolution1024"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="88dp"
+                    android:layout_height="42dp"
+                    android:text="@string/studio_resolution_1024" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/studioResolution1536"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="88dp"
+                    android:layout_height="42dp"
+                    android:text="@string/studio_resolution_1536" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/studioResolution2048"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="88dp"
+                    android:layout_height="42dp"
+                    android:text="@string/studio_resolution_2048" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:id="@+id/studioQuantityRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/studioQuantityTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/studio_quantity_title"
+                android:textColor="@color/aib_text_secondary"
+                android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/studioQuantityMinus"
+                style="@style/Widget.AIImageBox.Button.Secondary"
+                android:layout_width="44dp"
+                android:layout_height="40dp"
+                android:contentDescription="@string/studio_quantity_minus"
+                android:minWidth="44dp"
+                android:text="-" />
+
+            <TextView
+                android:id="@+id/studioQuantityValue"
+                android:layout_width="72dp"
+                android:layout_height="40dp"
+                android:gravity="center"
+                android:textColor="@color/aib_text"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="1 张" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/studioQuantityPlus"
+                style="@style/Widget.AIImageBox.Button.Secondary"
+                android:layout_width="44dp"
+                android:layout_height="40dp"
+                android:contentDescription="@string/studio_quantity_plus"
+                android:minWidth="44dp"
+                android:text="+" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/studioSubmitButton"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:layout_marginTop="16dp"
+        android:maxLines="1"
+        android:text="@string/studio_submit"
+        android:textColor="@color/aib_on_primary"
+        app:backgroundTint="@color/aib_primary" />
+
+    <LinearLayout
+        android:id="@+id/studioStatusPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_input_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/studioStatusTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/studio_status_title"
+                android:textColor="@color/aib_text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <ProgressBar
+                android:id="@+id/studioStatusProgress"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:indeterminate="true"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/studioStatusBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:lineSpacingExtra="3dp"
+            android:text="@string/studio_status_waiting"
+            android:textColor="@color/aib_text_secondary"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/studioResultPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_input_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/studioResultTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/studio_result_title"
+            android:textColor="@color/aib_text"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/studioResultPlaceholder"
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
+            android:layout_marginTop="10dp"
+            android:background="@color/aib_surface2"
+            android:gravity="center"
+            android:lineSpacingExtra="3dp"
+            android:padding="16dp"
+            android:text="@string/studio_result_placeholder"
+            android:textColor="@color/aib_text_secondary"
+            android:textSize="14sp" />
+    </LinearLayout>
+</LinearLayout>
