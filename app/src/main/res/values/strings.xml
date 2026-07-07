@@ -75,6 +75,7 @@
     <string name="action_copy">复制</string>
     <string name="action_delete">删除</string>
     <string name="action_reuse_parameters">复用参数</string>
+    <string name="action_view_detail">详情</string>
     <string name="action_cancel_task">取消</string>
     <string name="action_retry_task">重试</string>
 
@@ -106,9 +107,24 @@
     <string name="task_cancel_unavailable">当前任务无法取消。</string>
     <string name="task_retry_enqueued">重试任务已加入队列：%1$s</string>
     <string name="task_clear_finished_done">已清理 %1$d 个已完成任务。</string>
+    <string name="task_restored_after_restart">应用重启后已恢复排队。</string>
+    <string name="task_restore_channel_missing">应用重启恢复失败：渠道不存在或已禁用。</string>
+    <string name="task_restore_summary">已恢复 %1$d 个未完成任务，%2$d 个任务无法恢复。</string>
+    <string name="task_detail_title">任务详情</string>
+    <string name="task_detail_missing">任务记录不存在。</string>
     <string name="history_summary">最近 %1$d 条生成记录。</string>
     <string name="history_empty">暂无生成历史。成功或失败的任务都会写入这里。</string>
     <string name="history_card_detail">目标：%1$s / %2$s\n状态：%3$s\n结果：%4$d 张\n文件：%5$s\n错误：%6$s</string>
     <string name="history_thumbnail">历史结果缩略图</string>
     <string name="history_reuse_applied">已复用任务 %1$s 的提示词和参数。</string>
+    <string name="history_detail_title">历史详情</string>
+    <string name="detail_line_prompt">提示词：%1$s</string>
+    <string name="detail_line_target">目标：%1$s / %2$s</string>
+    <string name="detail_line_status">状态：%1$s</string>
+    <string name="detail_line_parameters">参数：%1$s</string>
+    <string name="detail_line_assets">结果文件：\n%1$s</string>
+    <string name="detail_line_error">错误：%1$s</string>
+    <string name="detail_line_attempt">最近尝试：\n%1$s</string>
+    <string name="detail_attempt_empty">暂无尝试记录。</string>
+    <string name="detail_attempt_format">第 %1$d 次\n状态：%2$s\nHTTP：%3$s\n耗时：%4$s ms\n错误：%5$s\n响应预览：%6$s</string>
 </resources>

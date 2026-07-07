@@ -33,6 +33,7 @@ import com.aiimagebox.data.SecureKeyStore
 import com.aiimagebox.generation.GenerationEvent
 import com.aiimagebox.generation.GenerationManager
 import com.aiimagebox.generation.GenerationParameters
+import com.aiimagebox.generation.GenerationProviderException
 import com.aiimagebox.generation.GenerationQueueItem
 import com.aiimagebox.generation.GenerationRequest
 import com.aiimagebox.generation.GenerationStatus as QueueGenerationStatus
@@ -74,6 +75,7 @@ class MainActivity : AppCompatActivity() {
         wireNavigation()
         wireStudioForm()
         observeGenerationEvents()
+        restorePendingTasks()
         render(currentTab)
     }
 
@@ -190,6 +192,58 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    private fun restorePendingTasks() {
+        val channelsById = channelStore.load().associateBy { it.id }
+        var restoredCount = 0
+        var blockedCount = 0
+        generationStore.loadTasks()
+            .filter { it.status == StoredGenerationStatus.QUEUED || it.status == StoredGenerationStatus.RUNNING }
+            .forEach { task ->
+                val channel = channelsById[task.channelId]
+                if (channel != null && channel.enabled) {
+                    generationStore.updateTask(task.id) {
+                        it.copy(
+                            status = StoredGenerationStatus.QUEUED,
+                            errorMessage = getString(R.string.task_restored_after_restart),
+                            startedAt = null,
+                            completedAt = null,
+                        )
+                    }
+                    generationManager.enqueue(task.toGenerationRequest(channel))
+                    restoredCount++
+                } else {
+                    val updated = generationStore.updateTask(task.id) {
+                        it.copy(
+                            status = StoredGenerationStatus.FAILED,
+                            errorMessage = getString(R.string.task_restore_channel_missing),
+                            completedAt = System.currentTimeMillis(),
+                        )
+                    }
+                    if (updated != null) generationStore.appendRecord(updated)
+                    blockedCount++
+                }
+            }
+        if (restoredCount > 0 || blockedCount > 0) {
+            binding.studioForm.setStatus(getString(R.string.task_restore_summary, restoredCount, blockedCount))
+        }
+    }
+
+    private fun GenerationTask.toGenerationRequest(channel: ProviderChannel): GenerationRequest {
+        val parameters = runCatching { JSONObject(parametersJson) }.getOrDefault(JSONObject())
+        return GenerationRequest(
+            id = id,
+            prompt = prompt,
+            target = GenerationTarget.fromChannel(channel, model.ifBlank { channel.defaultModel }),
+            parameters = GenerationParameters(
+                aspectRatio = parameters.optString("aspect_ratio", "1:1"),
+                resolution = parameters.optString("resolution", "1024x1024"),
+                count = parameters.optInt("count", 1).coerceIn(1, 10),
+                responseFormat = "b64_json",
+            ),
+            createdAtMillis = createdAt,
+        )
+    }
+
     private fun observeGenerationEvents() {
         lifecycleScope.launch {
             generationManager.events.collect { event ->
@@ -204,7 +258,11 @@ class MainActivity : AppCompatActivity() {
             is GenerationEvent.Started -> {
                 withContext(Dispatchers.IO) {
                     generationStore.updateTask(event.requestId) {
-                        it.copy(status = StoredGenerationStatus.RUNNING, startedAt = System.currentTimeMillis())
+                        it.copy(
+                            status = StoredGenerationStatus.RUNNING,
+                            errorMessage = "",
+                            startedAt = System.currentTimeMillis(),
+                        )
                     }
                 }
                 if (currentTab == Tab.TASKS) renderTaskPanel()
@@ -300,6 +358,7 @@ class MainActivity : AppCompatActivity() {
                 status = StoredGenerationStatus.SUCCEEDED,
                 assets = it.assets + assets,
                 attempts = it.attempts + storedAttempt(event, StoredGenerationStatus.SUCCEEDED, ""),
+                errorMessage = "",
                 completedAt = System.currentTimeMillis(),
             )
         }
@@ -320,6 +379,25 @@ class MainActivity : AppCompatActivity() {
             is GenerationEvent.Started -> event.item
         }
         val now = System.currentTimeMillis()
+        val providerError = (event as? GenerationEvent.Failed)?.error as? GenerationProviderException
+        val requestJson = JSONObject()
+            .put("prompt", item.request.prompt)
+            .put("channel_id", item.request.target.channelId)
+            .put("model", item.request.target.model)
+            .put("aspect_ratio", item.request.parameters.aspectRatio)
+            .put("resolution", item.request.parameters.resolution ?: item.request.parameters.size.orEmpty())
+            .put("count", item.request.parameters.count)
+            .toString()
+        val responseJson = providerError?.providerResult?.let { result ->
+            JSONObject()
+                .put("provider_status", result.status.name)
+                .put("provider_request_id", result.requestId)
+                .put("http_status", result.httpStatus ?: JSONObject.NULL)
+                .put("elapsed_ms", result.elapsedMillis)
+                .put("raw_preview", result.rawPreview)
+                .put("error", result.error)
+                .toString()
+        } ?: "{}"
         return StoredAttemptRecord(
             taskId = item.request.id,
             attemptNumber = 1,
@@ -328,10 +406,13 @@ class MainActivity : AppCompatActivity() {
             channelName = item.request.target.channelName,
             providerType = item.request.target.providerType,
             model = item.request.target.model,
-            errorMessage = error,
+            requestJson = requestJson,
+            responseJson = responseJson,
+            httpStatusCode = providerError?.providerResult?.httpStatus,
+            errorMessage = error.ifBlank { providerError?.providerResult?.error.orEmpty() },
             startedAt = item.startedAtMillis ?: now,
             endedAt = now,
-            durationMs = (item.startedAtMillis ?: now).let { now - it },
+            durationMs = providerError?.providerResult?.elapsedMillis ?: (item.startedAtMillis ?: now).let { now - it },
         )
     }
 
@@ -448,6 +529,7 @@ class MainActivity : AppCompatActivity() {
             QueueGenerationStatus.SUCCEEDED
             -> actions.addView(actionButton(R.string.action_retry_task) { retryTask(item) })
         }
+        actions.addView(actionButton(R.string.action_view_detail) { showTaskDetails(item.request.id) })
         if (actions.childCount > 0) content.addView(actions)
         card.addView(content)
         return card
@@ -487,6 +569,19 @@ class MainActivity : AppCompatActivity() {
         val removed = generationManager.clearFinished()
         Toast.makeText(this, getString(R.string.task_clear_finished_done, removed), Toast.LENGTH_SHORT).show()
         renderTaskPanel()
+    }
+
+    private fun showTaskDetails(taskId: String) {
+        val task = generationStore.getTask(taskId)
+        if (task == null) {
+            Toast.makeText(this, getString(R.string.task_detail_missing), Toast.LENGTH_SHORT).show()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.task_detail_title)
+            .setMessage(task.detailText())
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun renderHistoryPanel() {
@@ -544,6 +639,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, dp(12), 0, 0)
         }
         actions.addView(actionButton(R.string.action_reuse_parameters) { reuseHistoryRecord(record) })
+        actions.addView(actionButton(R.string.action_view_detail) { showHistoryDetails(record) })
         content.addView(actions)
         card.addView(content)
         return card
@@ -577,6 +673,79 @@ class MainActivity : AppCompatActivity() {
             quantity = parameters.optInt("count", 1).coerceIn(1, 4),
         )
         binding.studioForm.setStatus(getString(R.string.history_reuse_applied, record.taskId.take(8)))
+    }
+
+    private fun showHistoryDetails(record: GenerationRecord) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.history_detail_title)
+            .setMessage(record.detailText())
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    private fun GenerationTask.detailText(): String {
+        val files = assets
+            .map { it.media.filePath }
+            .filter { it.isNotBlank() }
+            .take(5)
+            .joinToString("\n")
+            .ifBlank { "-" }
+        val attempt = attempts.lastOrNull()?.detailText() ?: getString(R.string.detail_attempt_empty)
+        return listOf(
+            getString(R.string.detail_line_prompt, prompt),
+            getString(R.string.detail_line_target, channelName.ifBlank { channelId }, model),
+            getString(R.string.detail_line_status, status.displayName()),
+            getString(R.string.detail_line_parameters, parametersJson),
+            getString(R.string.detail_line_assets, files),
+            getString(R.string.detail_line_error, errorMessage.ifBlank { "-" }),
+            getString(R.string.detail_line_attempt, attempt),
+        ).joinToString("\n\n")
+    }
+
+    private fun GenerationRecord.detailText(): String {
+        val files = assets
+            .map { it.media.filePath }
+            .filter { it.isNotBlank() }
+            .take(5)
+            .joinToString("\n")
+            .ifBlank { "-" }
+        val attempt = attempts.lastOrNull()?.detailText() ?: getString(R.string.detail_attempt_empty)
+        return listOf(
+            getString(R.string.detail_line_prompt, prompt),
+            getString(R.string.detail_line_target, channelName.ifBlank { channelId }, model),
+            getString(R.string.detail_line_status, status.displayName()),
+            getString(R.string.detail_line_parameters, parametersJson),
+            getString(R.string.detail_line_assets, files),
+            getString(R.string.detail_line_error, errorMessage.ifBlank { "-" }),
+            getString(R.string.detail_line_attempt, attempt),
+        ).joinToString("\n\n")
+    }
+
+    private fun StoredAttemptRecord.detailText(): String {
+        val response = runCatching { JSONObject(responseJson) }.getOrNull()
+        val rawPreview = response?.optString("raw_preview", "").orEmpty()
+            .ifBlank { response?.optString("_raw", "").orEmpty() }
+            .ifBlank { "-" }
+            .take(1200)
+        return getString(
+            R.string.detail_attempt_format,
+            attemptNumber,
+            status.displayName(),
+            httpStatusCode?.toString() ?: "-",
+            durationMs?.toString() ?: "-",
+            errorMessage.ifBlank { "-" },
+            rawPreview,
+        )
+    }
+
+    private fun StoredGenerationStatus.displayName(): String {
+        return when (this) {
+            StoredGenerationStatus.QUEUED -> getString(R.string.task_status_queued)
+            StoredGenerationStatus.RUNNING -> getString(R.string.task_status_running)
+            StoredGenerationStatus.SUCCEEDED -> getString(R.string.task_status_succeeded)
+            StoredGenerationStatus.FAILED -> getString(R.string.task_status_failed)
+            StoredGenerationStatus.CANCELED -> getString(R.string.task_status_cancelled)
+        }
     }
 
     private fun simpleCard(title: String, detail: String): View {

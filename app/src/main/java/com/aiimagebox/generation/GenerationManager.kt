@@ -32,6 +32,11 @@ interface GenerationExecutor {
     suspend fun generate(request: GenerationRequest): GenerationResult
 }
 
+class GenerationProviderException(
+    val providerResult: ProviderGenerationResult,
+    message: String = providerResult.error.ifBlank { "Provider generation failed: ${providerResult.status}" },
+) : IllegalStateException(message)
+
 class ProviderRegistryGenerationExecutor(
     private val registry: ProviderRegistry = ProviderRegistry,
 ) : GenerationExecutor {
@@ -106,10 +111,10 @@ class ProviderRegistryGenerationExecutor(
 
     private fun ProviderGenerationResult.toGenerationResult(request: GenerationRequest): GenerationResult {
         if (status != ProviderGenerationStatus.SUCCEEDED) {
-            throw IllegalStateException(error.ifBlank { "Provider generation failed: $status" })
+            throw GenerationProviderException(this)
         }
         if (images.isEmpty()) {
-            throw IllegalStateException("Provider result did not include image assets.")
+            throw GenerationProviderException(this, "Provider result did not include image assets.")
         }
 
         val metadata = buildMap {
