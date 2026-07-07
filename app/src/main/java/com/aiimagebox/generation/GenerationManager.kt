@@ -7,6 +7,7 @@ import com.aiimagebox.provider.GenerationRequest as ProviderGenerationRequest
 import com.aiimagebox.provider.GenerationResult as ProviderGenerationResult
 import com.aiimagebox.provider.GenerationStatus as ProviderGenerationStatus
 import com.aiimagebox.provider.ImageResponseFormat
+import com.aiimagebox.provider.MediaReference
 import com.aiimagebox.provider.ProviderRegistry
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.File
 
 interface GenerationExecutor {
     suspend fun generate(request: GenerationRequest): GenerationResult
@@ -55,7 +57,11 @@ class ProviderRegistryGenerationExecutor(
 
     private fun GenerationRequest.toProviderRequest(): ProviderGenerationRequest {
         return ProviderGenerationRequest(
-            mode = ProviderGenerationMode.TEXT_TO_IMAGE,
+            mode = if (parameters.referenceImagePaths.isEmpty()) {
+                ProviderGenerationMode.TEXT_TO_IMAGE
+            } else {
+                ProviderGenerationMode.IMAGE_TO_IMAGE
+            },
             prompt = prompt,
             negativePrompt = parameters.negativePrompt.orEmpty(),
             aspectRatio = parameters.aspectRatio.ifBlank { "1:1" },
@@ -65,9 +71,26 @@ class ProviderRegistryGenerationExecutor(
             quality = parameters.quality,
             style = parameters.style,
             seed = parameters.seed,
-            references = emptyList(),
+            references = parameters.referenceImagePaths.mapNotNull { path ->
+                val file = File(path)
+                if (!file.isFile) return@mapNotNull null
+                MediaReference(
+                    bytes = file.readBytes(),
+                    mimeType = mimeTypeForFile(file),
+                    name = file.name,
+                )
+            },
             extra = parameters.toExtraJson(),
         )
+    }
+
+    private fun mimeTypeForFile(file: File): String {
+        return when (file.extension.lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "webp" -> "image/webp"
+            "gif" -> "image/gif"
+            else -> "image/png"
+        }
     }
 
     private fun GenerationParameters.toExtraJson(): JSONObject {

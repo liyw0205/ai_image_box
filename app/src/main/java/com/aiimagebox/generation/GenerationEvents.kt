@@ -55,6 +55,7 @@ data class GenerationParameters(
     val quality: String = "",
     val style: String = "",
     val responseFormat: String = "b64_json",
+    val referenceImagePaths: List<String> = emptyList(),
     val extra: Map<String, Any?> = emptyMap(),
 )
 

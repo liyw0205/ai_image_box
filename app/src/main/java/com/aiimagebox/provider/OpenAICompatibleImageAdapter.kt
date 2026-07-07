@@ -7,8 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.net.InetSocketAddress
@@ -81,11 +83,13 @@ class OpenAICompatibleImageAdapter(
         val startedAt = System.currentTimeMillis()
         val apiKey = decryptApiKey(channel)
         val secrets = listOf(apiKey)
-        if (request.mode != GenerationMode.TEXT_TO_IMAGE) {
+        if (request.mode != GenerationMode.TEXT_TO_IMAGE && request.mode != GenerationMode.IMAGE_TO_IMAGE) {
             return@withContext failedResult(
                 channel = channel,
                 target = target,
-                error = ProviderErrorLocalizer.localMessage("OpenAI-compatible image adapter only supports TEXT_TO_IMAGE."),
+                error = ProviderErrorLocalizer.localMessage(
+                    "OpenAI-compatible image adapter only supports TEXT_TO_IMAGE and IMAGE_TO_IMAGE.",
+                ),
                 startedAt = startedAt,
             )
         }
@@ -98,7 +102,21 @@ class OpenAICompatibleImageAdapter(
             )
         }
 
-        val url = endpoint(target.baseUrl.ifBlank { channel.baseUrl }, "/v1/images/generations")
+        if (request.mode == GenerationMode.IMAGE_TO_IMAGE && request.references.isEmpty()) {
+            return@withContext failedResult(
+                channel = channel,
+                target = target,
+                error = ProviderErrorLocalizer.localMessage("IMAGE_TO_IMAGE requires at least one reference image."),
+                startedAt = startedAt,
+            )
+        }
+
+        val path = if (request.mode == GenerationMode.IMAGE_TO_IMAGE) {
+            "/v1/images/edits"
+        } else {
+            "/v1/images/generations"
+        }
+        val url = endpoint(target.baseUrl.ifBlank { channel.baseUrl }, path)
             ?: return@withContext failedResult(
                 channel = channel,
                 target = target,
@@ -108,12 +126,16 @@ class OpenAICompatibleImageAdapter(
                 startedAt = startedAt,
             )
         val client = clientFor(target.timeoutSeconds, target.proxy.ifBlank { channel.proxy })
-        val payload = imagePayload(request, target.model.ifBlank { channel.defaultModel })
+        val payload = requestBody(request, target.model.ifBlank { channel.defaultModel })
         val httpRequest = Request.Builder()
             .url(url)
-            .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .post(payload)
             .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
+            .apply {
+                if (request.mode == GenerationMode.TEXT_TO_IMAGE) {
+                    header("Content-Type", "application/json")
+                }
+            }
             .applyAuth(apiKey)
             .build()
 
@@ -204,7 +226,7 @@ class OpenAICompatibleImageAdapter(
     override fun capabilities(channel: ProviderChannel): ProviderCapabilities {
         return ProviderCapabilities(
             textToImage = true,
-            imageToImage = false,
+            imageToImage = true,
             textToVideo = false,
             imageToVideo = false,
             synchronous = true,
@@ -233,6 +255,33 @@ class OpenAICompatibleImageAdapter(
             payload.put(key, request.extra.opt(key))
         }
         return payload
+    }
+
+    private fun requestBody(request: GenerationRequest, model: String): RequestBody {
+        if (request.mode == GenerationMode.IMAGE_TO_IMAGE) return imageEditPayload(request, model)
+        return imagePayload(request, model).toString().toRequestBody(JSON_MEDIA_TYPE)
+    }
+
+    private fun imageEditPayload(request: GenerationRequest, model: String): RequestBody {
+        val builder = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("model", model)
+            .addFormDataPart("prompt", request.prompt)
+            .addFormDataPart("n", request.count.coerceIn(1, 10).toString())
+            .addFormDataPart("size", imageSize(request))
+            .addFormDataPart("response_format", request.responseFormat.apiValue)
+
+        if (request.negativePrompt.isNotBlank()) builder.addFormDataPart("negative_prompt", request.negativePrompt)
+        if (request.quality.isNotBlank()) builder.addFormDataPart("quality", request.quality)
+        if (request.style.isNotBlank()) builder.addFormDataPart("style", request.style)
+        request.seed?.let { builder.addFormDataPart("seed", it.toString()) }
+
+        request.references.take(1).forEach { reference ->
+            val mediaType = reference.mimeType.ifBlank { "image/png" }.toMediaType()
+            val name = reference.name.ifBlank { "reference.png" }
+            builder.addFormDataPart("image", name, reference.bytes.toRequestBody(mediaType))
+        }
+        return builder.build()
     }
 
     private fun imageSize(request: GenerationRequest): String {

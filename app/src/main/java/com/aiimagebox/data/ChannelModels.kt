@@ -54,7 +54,7 @@ data class ProviderChannel(
         .put("updated_at", updatedAt)
 
     fun targetLabels(): String {
-        val models = enabledModels.ifEmpty { listOf(defaultModel) }.filter { it.isNotBlank() }
+        val models = enabledModels.filter { it.isNotBlank() }
         return if (models.isEmpty()) "未启用模型" else models.joinToString(", ")
     }
 
@@ -98,4 +98,3 @@ data class ModelTarget(
     val label: String
         get() = "$channelName/$model"
 }
-

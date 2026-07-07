@@ -6,13 +6,20 @@
     <string name="studio_prompt_hint">描述你想生成的画面、风格、主体和细节</string>
     <string name="studio_prompt_counter_hint">建议写清主体、构图、光线、材质和禁用元素。</string>
     <string name="studio_channel_title">渠道/模型</string>
-    <string name="studio_channel_next">切换</string>
+    <string name="studio_channel_select">选择</string>
+    <string name="studio_channel_select_title">选择渠道和模型</string>
     <string name="studio_channel_empty_title">无可用渠道</string>
     <string name="studio_channel_empty_body">请先在渠道页启用至少一个模型。</string>
     <string name="studio_channel_summary_format">%1$s · %2$s</string>
     <string name="studio_channel_provider_format">类型：%1$s</string>
     <string name="studio_channel_endpoint_format">接口：%1$s</string>
     <string name="studio_channel_model_unknown">未指定模型</string>
+    <string name="studio_reference_title">参考图（可选）</string>
+    <string name="studio_reference_empty">未选择参考图。选择后会按图生图提交。</string>
+    <string name="studio_reference_selected">已选择参考图，本次按图生图提交。</string>
+    <string name="studio_reference_image">参考图预览</string>
+    <string name="action_pick_reference">选择图片</string>
+    <string name="action_clear_reference">清除</string>
     <string name="studio_settings_title">生成参数</string>
     <string name="studio_aspect_title">比例</string>
     <string name="studio_aspect_square">1:1</string>
@@ -36,5 +43,5 @@
     <string name="studio_status_no_listener">表单请求已整理完成，但提交处理器未绑定。</string>
     <string name="studio_status_submitting">正在提交生成任务。</string>
     <string name="studio_result_title">本次结果</string>
-    <string name="studio_result_placeholder">生成完成后会显示保存数量和本地路径预览。</string>
+    <string name="studio_result_placeholder">生成完成后会显示图片预览和保存数量。</string>
 </resources>

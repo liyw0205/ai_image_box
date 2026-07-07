@@ -13,8 +13,8 @@
     <string name="badge_channels">多接口 provider 管理</string>
 
     <string name="studio_headline">统一的多接口创作工作台</string>
-    <string name="studio_body">当前已接入 OpenAI-compatible 文生图链路，可从启用渠道提交任务，生成结果会保存到本地缓存并进入历史。</string>
-    <string name="studio_status">已写入 channels.json、task_state.json、generation_records.jsonl 和生成文件缓存；后续继续补图生图、生视频和多 provider 回退。</string>
+    <string name="studio_body">当前已接入 OpenAI-compatible 文生图和图生图链路，可从启用渠道选择模型提交任务，生成结果会保存到本地缓存并进入历史。</string>
+    <string name="studio_status">已写入 channels.json、task_state.json、generation_records.jsonl 和生成文件缓存；后续继续补生视频和多 provider 回退。</string>
 
     <string name="tasks_headline">任务队列会承载长生图和异步生视频</string>
     <string name="tasks_body">队列会记录 Queued、Running、Polling、Downloading、Succeeded、Failed 和 Canceled 状态，并支持重试、取消和错误复现。</string>
@@ -42,11 +42,11 @@
     <string name="channel_summary">已配置 %1$d 个渠道，其中 %2$d 个启用。</string>
     <string name="channel_empty">还没有渠道。点“添加渠道”创建 OpenAI-compatible、Gemini、Agnes、Grok 或生视频接口。</string>
     <string name="channel_disabled_name">%1$s（已禁用）</string>
-    <string name="channel_detail">模式：%1$s\n地址：%2$s\n模型：%3$s\n密钥：%4$s</string>
+    <string name="channel_detail">地址：%1$s\n模型：%2$s\n密钥：%3$s</string>
     <string name="channel_no_base_url">未填写</string>
     <string name="channel_key_saved">已加密保存</string>
     <string name="channel_key_empty">未保存</string>
-    <string name="channel_required_fields">渠道名和 provider 类型必填。</string>
+    <string name="channel_required_fields">渠道名必填。</string>
     <string name="channel_base_url_required">当前 provider 需要填写 Base URL。</string>
     <string name="channel_invalid_base_url">Base URL 必须是有效的 http 或 https 地址。</string>
     <string name="channel_invalid_extra">扩展 JSON 格式不正确。</string>
@@ -72,12 +72,7 @@
     <string name="extra_mode_json">JSON</string>
     <string name="extra_visual_hint">这里用于修改已配置模型的类型，保存时会同步写入扩展 JSON。</string>
     <string name="extra_visual_no_models">暂无已配置模型。请先拉取模型或在“启用模型”中填写模型名。</string>
-    <string name="channel_mode_image">图片</string>
-    <string name="channel_mode_video">视频</string>
-    <string name="channel_mode_grok_video">Grok 视频</string>
-    <string name="channel_mode_seedance_video">Seedance 视频</string>
-    <string name="channel_mode_current">当前渠道类型：%1$s</string>
-    <string name="studio_channel_mode">模式：%1$s</string>
+    <string name="studio_channel_type">模型类型：%1$s</string>
     <string name="channel_template_openai">OpenAI</string>
     <string name="channel_template_compatible">兼容接口</string>
     <string name="channel_template_local">本地接口</string>
@@ -140,6 +135,8 @@
     <string name="studio_generate_failed">生成失败：%1$s</string>
     <string name="studio_generate_cancelled">任务已取消：%1$s</string>
     <string name="studio_result_image">生成结果预览图</string>
+    <string name="reference_imported">参考图已添加，本次会按图生图提交。</string>
+    <string name="reference_import_failed">参考图导入失败。</string>
     <string name="export_no_files">没有可导出的结果文件。</string>
     <string name="export_failed">保存到公共目录失败。</string>
     <string name="export_succeeded">已保存 %1$d 个文件到公共目录：%2$s</string>

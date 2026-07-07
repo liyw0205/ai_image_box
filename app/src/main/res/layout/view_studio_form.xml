@@ -113,8 +113,8 @@
                 style="@style/Widget.AIImageBox.Button.Secondary"
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"
-                android:minWidth="72dp"
-                android:text="@string/studio_channel_next"
+                android:minWidth="84dp"
+                android:text="@string/studio_channel_select"
                 android:textSize="14sp" />
         </LinearLayout>
 
@@ -138,7 +138,7 @@
             android:maxLines="1"
             android:textColor="@color/aib_text_secondary"
             android:textSize="14sp"
-            tools:text="类型：openai_compatible_image" />
+            tools:text="模型类型：OpenAI 图像格式" />
 
         <TextView
             android:id="@+id/studioChannelEndpoint"
@@ -150,6 +150,70 @@
             android:textColor="@color/aib_text_secondary"
             android:textSize="13sp"
             tools:text="接口：https://example.local/v1/images" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/studioReferencePanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_input_panel"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/studioReferenceTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/studio_reference_title"
+            android:textColor="@color/aib_text"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/studioReferenceStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/studio_reference_empty"
+            android:textColor="@color/aib_text_secondary"
+            android:textSize="14sp" />
+
+        <ImageView
+            android:id="@+id/studioReferenceImage"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:layout_marginTop="10dp"
+            android:background="@color/aib_surface2"
+            android:contentDescription="@string/studio_reference_image"
+            android:scaleType="centerCrop"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/studioReferenceActions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/studioPickReferenceButton"
+                style="@style/Widget.AIImageBox.Button.Secondary"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="@string/action_pick_reference" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/studioClearReferenceButton"
+                style="@style/Widget.AIImageBox.Button.Secondary"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:text="@string/action_clear_reference"
+                android:visibility="gone" />
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout

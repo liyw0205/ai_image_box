@@ -8,6 +8,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.core.widget.doAfterTextChanged
 import com.aiimagebox.R
 import com.aiimagebox.data.ProviderChannel
@@ -25,19 +26,23 @@ class StudioForm @JvmOverloads constructor(
     private var selectedTargetIndex = 0
     private var quantity = DEFAULT_QUANTITY
     private var submitting = false
+    private var referenceImagePath = ""
 
     var onSubmit: ((StudioSubmitRequest) -> Unit)? = null
     var onSavePublic: (() -> Unit)? = null
+    var onPickReferenceImage: (() -> Unit)? = null
 
     init {
         binding.studioAspectGroup.check(binding.studioAspectSquare.id)
         binding.studioResolutionGroup.check(binding.studioResolution1024.id)
         binding.studioPromptInput.doAfterTextChanged { updateSubmitState() }
-        binding.studioNextTargetButton.setOnClickListener { selectNextTarget() }
+        binding.studioNextTargetButton.setOnClickListener { showTargetPicker() }
         binding.studioQuantityMinus.setOnClickListener { setQuantity(quantity - 1) }
         binding.studioQuantityPlus.setOnClickListener { setQuantity(quantity + 1) }
         binding.studioSubmitButton.setOnClickListener { submitCurrentForm() }
         binding.studioSavePublicButton.setOnClickListener { onSavePublic?.invoke() }
+        binding.studioPickReferenceButton.setOnClickListener { onPickReferenceImage?.invoke() }
+        binding.studioClearReferenceButton.setOnClickListener { clearReferenceImage() }
 
         setQuantity(DEFAULT_QUANTITY)
         renderSelectedTarget()
@@ -64,6 +69,10 @@ class StudioForm @JvmOverloads constructor(
 
     fun setOnSavePublicListener(listener: (() -> Unit)?) {
         onSavePublic = listener
+    }
+
+    fun setOnPickReferenceImageListener(listener: (() -> Unit)?) {
+        onPickReferenceImage = listener
     }
 
     fun setPrompt(prompt: CharSequence) {
@@ -99,6 +108,27 @@ class StudioForm @JvmOverloads constructor(
 
     fun setStatus(message: CharSequence) {
         binding.studioStatusBody.text = message
+    }
+
+    fun setReferenceImage(filePath: String) {
+        referenceImagePath = filePath.trim()
+        val bitmap = decodePreview(referenceImagePath, dp(420))
+        if (bitmap != null) {
+            binding.studioReferenceImage.setImageBitmap(bitmap)
+            binding.studioReferenceImage.visibility = View.VISIBLE
+            binding.studioReferenceStatus.text = context.getString(R.string.studio_reference_selected)
+            binding.studioClearReferenceButton.visibility = View.VISIBLE
+        } else {
+            clearReferenceImage()
+        }
+    }
+
+    fun clearReferenceImage() {
+        referenceImagePath = ""
+        binding.studioReferenceImage.setImageDrawable(null)
+        binding.studioReferenceImage.visibility = View.GONE
+        binding.studioReferenceStatus.text = context.getString(R.string.studio_reference_empty)
+        binding.studioClearReferenceButton.visibility = View.GONE
     }
 
     fun setResultPlaceholder(message: CharSequence) {
@@ -205,13 +235,25 @@ class StudioForm @JvmOverloads constructor(
             quantity = quantity,
             timeoutSeconds = target.timeoutSeconds,
             proxy = target.proxy,
+            referenceImagePath = referenceImagePath,
         )
     }
 
-    private fun selectNextTarget() {
+    private fun showTargetPicker() {
         if (targetOptions.isEmpty()) return
-        selectedTargetIndex = (selectedTargetIndex + 1) % targetOptions.size
-        renderSelectedTarget()
+        val labels = targetOptions.map { target ->
+            val modelLabel = target.model.ifBlank { TEXT_CHANNEL_MODEL_UNKNOWN }
+            "${target.channelName} / $modelLabel\n${target.typeLabel()}"
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.studio_channel_select_title)
+            .setSingleChoiceItems(labels, selectedTargetIndex) { dialog, which ->
+                selectedTargetIndex = which
+                renderSelectedTarget()
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun selectTarget(channelId: String, model: String) {
@@ -236,7 +278,7 @@ class StudioForm @JvmOverloads constructor(
 
         val modelLabel = target.model.ifBlank { TEXT_CHANNEL_MODEL_UNKNOWN }
         binding.studioChannelName.text = "${target.channelName} · $modelLabel"
-        binding.studioChannelMeta.text = context.getString(R.string.studio_channel_mode, target.modeLabel())
+        binding.studioChannelMeta.text = context.getString(R.string.studio_channel_type, target.typeLabel())
         binding.studioChannelEndpoint.visibility = View.VISIBLE
         binding.studioChannelEndpoint.text = "接口：${target.baseUrl.ifBlank { "-" }}"
         binding.studioNextTargetButton.isEnabled = targetOptions.size > 1
@@ -328,10 +370,9 @@ class StudioForm @JvmOverloads constructor(
         if (!enabled) return emptyList()
         val modelTypes = modelTypeOverrides(extraJson)
         val models = enabledModels
-            .ifEmpty { listOf(defaultModel) }
             .map { it.trim() }
             .filter { it.isNotBlank() }
-            .ifEmpty { listOf("") }
+            .distinct()
 
         return models.map { model ->
             StudioChannelTarget(
@@ -361,11 +402,16 @@ class StudioForm @JvmOverloads constructor(
         return values
     }
 
-    private fun StudioChannelTarget.modeLabel(): String {
-        return if ("video" in providerType.lowercase()) {
-            context.getString(R.string.channel_mode_video)
-        } else {
-            context.getString(R.string.channel_mode_image)
+    private fun StudioChannelTarget.typeLabel(): String {
+        return when (providerType.trim()) {
+            "openai_compatible_image" -> context.getString(R.string.model_type_openai_image)
+            "gemini_image" -> context.getString(R.string.model_type_gemini_image)
+            "agnes_image" -> context.getString(R.string.model_type_agnes_image)
+            "grok_image" -> context.getString(R.string.model_type_grok_image)
+            "openai_compatible_video" -> context.getString(R.string.model_type_openai_video)
+            "grok_video" -> context.getString(R.string.model_type_grok_video)
+            "seedance_video" -> context.getString(R.string.model_type_seedance_video)
+            else -> providerType.ifBlank { "-" }
         }
     }
 
@@ -391,6 +437,7 @@ class StudioForm @JvmOverloads constructor(
         val quantity: Int,
         val timeoutSeconds: Int,
         val proxy: String = "",
+        val referenceImagePath: String = "",
     )
 
     companion object {

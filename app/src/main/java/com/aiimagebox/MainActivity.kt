@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
@@ -19,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -57,6 +59,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.URI
@@ -72,6 +75,9 @@ class MainActivity : AppCompatActivity() {
     private var syncingNav = false
     private var latestResultPaths: List<String> = emptyList()
     private var pendingPublicExportPaths: List<String> = emptyList()
+    private val referenceImagePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) importReferenceImage(uri)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -174,6 +180,9 @@ class MainActivity : AppCompatActivity() {
         binding.studioForm.setOnSavePublicListener {
             exportPathsToPublic(latestResultPaths)
         }
+        binding.studioForm.setOnPickReferenceImageListener {
+            referenceImagePicker.launch("image/*")
+        }
     }
 
     private fun bindStudioChannels() {
@@ -196,6 +205,10 @@ class MainActivity : AppCompatActivity() {
                 resolution = imageSize(request.resolution, request.aspectRatio),
                 count = request.quantity,
                 responseFormat = "b64_json",
+                referenceImagePaths = request.referenceImagePath
+                    .takeIf { it.isNotBlank() }
+                    ?.let { listOf(it) }
+                    .orEmpty(),
             ),
         )
         createStoredTask(generationRequest)
@@ -219,6 +232,7 @@ class MainActivity : AppCompatActivity() {
                     .put("aspect_ratio", request.parameters.aspectRatio.ifBlank { "1:1" })
                     .put("resolution", request.parameters.resolution ?: request.parameters.size ?: "1024x1024")
                     .put("count", request.parameters.count)
+                    .put("reference_images", JSONArray(request.parameters.referenceImagePaths))
                     .toString(),
             ),
         )
@@ -262,6 +276,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun GenerationTask.toGenerationRequest(channel: ProviderChannel): GenerationRequest {
         val parameters = runCatching { JSONObject(parametersJson) }.getOrDefault(JSONObject())
+        val references = mutableListOf<String>()
+        val referenceArray = parameters.optJSONArray("reference_images") ?: JSONArray()
+        for (index in 0 until referenceArray.length()) {
+            val path = referenceArray.optString(index, "").trim()
+            if (path.isNotBlank()) references.add(path)
+        }
         return GenerationRequest(
             id = id,
             prompt = prompt,
@@ -272,6 +292,7 @@ class MainActivity : AppCompatActivity() {
                 resolution = parameters.optString("resolution", "1024x1024"),
                 count = parameters.optInt("count", 1).coerceIn(1, 10),
                 responseFormat = "b64_json",
+                referenceImagePaths = references,
             ),
             createdAtMillis = createdAt,
         )
@@ -420,6 +441,7 @@ class MainActivity : AppCompatActivity() {
             .put("aspect_ratio", item.request.parameters.aspectRatio)
             .put("resolution", item.request.parameters.resolution ?: item.request.parameters.size.orEmpty())
             .put("count", item.request.parameters.count)
+            .put("reference_images", JSONArray(item.request.parameters.referenceImagePaths))
             .toString()
         val responseJson = providerError?.providerResult?.let { result ->
             JSONObject()
@@ -477,6 +499,30 @@ class MainActivity : AppCompatActivity() {
             "image/webp" -> "webp"
             "image/gif" -> "gif"
             else -> "png"
+        }
+    }
+
+    private fun importReferenceImage(uri: Uri) {
+        lifecycleScope.launch {
+            val imported = withContext(Dispatchers.IO) {
+                runCatching {
+                    val mimeType = contentResolver.getType(uri).orEmpty().ifBlank { "image/png" }
+                    val target = File(
+                        appDirectories.requestImages,
+                        "reference_${System.currentTimeMillis()}.${extensionForMime(mimeType)}",
+                    )
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        target.outputStream().use { output -> input.copyTo(output) }
+                    } ?: error("Cannot open selected image.")
+                    target.absolutePath
+                }.getOrNull()
+            }
+            if (imported == null) {
+                Toast.makeText(this@MainActivity, R.string.reference_import_failed, Toast.LENGTH_SHORT).show()
+            } else {
+                binding.studioForm.setReferenceImage(imported)
+                binding.studioForm.setStatus(getString(R.string.reference_imported))
+            }
         }
     }
 
@@ -949,7 +995,6 @@ class MainActivity : AppCompatActivity() {
         content.addView(TextView(this).apply {
             text = getString(
                 R.string.channel_detail,
-                channelModeLabel(channel),
                 channel.baseUrl.ifBlank { getString(R.string.channel_no_base_url) },
                 channel.targetLabels(),
                 if (channel.apiKey != null) getString(R.string.channel_key_saved) else getString(R.string.channel_key_empty),
@@ -1390,33 +1435,6 @@ class MainActivity : AppCompatActivity() {
             .distinct()
     }
 
-    private fun channelModeLabel(channel: ProviderChannel): String {
-        if (!isVideoProviderType(channel.providerType)) return getString(R.string.channel_mode_image)
-        return when (videoProviderKey(channel.extraJson)) {
-            VIDEO_PROVIDER_SEEDANCE -> getString(R.string.channel_mode_seedance_video)
-            VIDEO_PROVIDER_GROK -> getString(R.string.channel_mode_grok_video)
-            else -> getString(R.string.channel_mode_video)
-        }
-    }
-
-    private fun channelModeLabel(providerType: String): String {
-        return if (isVideoProviderType(providerType)) {
-            getString(R.string.channel_mode_video)
-        } else {
-            getString(R.string.channel_mode_image)
-        }
-    }
-
-    private fun isVideoProviderType(providerType: String): Boolean {
-        return "video" in providerType.lowercase()
-    }
-
-    private fun videoProviderKey(extraJson: String): String {
-        return runCatching {
-            JSONObject(extraJson.ifBlank { "{}" }).optString(KEY_VIDEO_PROVIDER, "").trim().lowercase()
-        }.getOrDefault("")
-    }
-
     private fun syncExtraModelTypes(
         extra: EditText,
         models: List<String>,
@@ -1427,7 +1445,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun showChannelDialog(existing: ProviderChannel?) {
         val name = editText(R.string.field_channel_name, existing?.name.orEmpty())
-        val providerType = editText(R.string.field_provider_type, existing?.providerType ?: "openai_compatible_image")
         val baseUrl = editText(R.string.field_base_url, existing?.baseUrl.orEmpty())
         val apiKey = editText(R.string.field_api_key, "")
         apiKey.hint = if (existing?.apiKey != null) getString(R.string.field_api_key_saved_hint) else getString(R.string.field_api_key)
@@ -1445,14 +1462,12 @@ class MainActivity : AppCompatActivity() {
             isChecked = existing?.enabled ?: true
             setPadding(0, dp(8), 0, dp(8))
         }
-        val channelMode = channelModeRow(providerType)
         val extraVisualEditor = extraModelTypeVisualEditor(extra, enabledModels)
         val extraMode = extraModeRow(extraVisualEditor.view, extra, extraVisualEditor.refresh)
 
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(4), dp(2), dp(4), dp(2))
-            addView(channelMode)
             addView(name)
             addView(baseUrl)
             addView(apiKey)
@@ -1477,7 +1492,6 @@ class MainActivity : AppCompatActivity() {
                     dialog = dialog,
                     existing = existing,
                     name = name.text.toString(),
-                    providerType = providerType.text.toString(),
                     baseUrl = baseUrl.text.toString(),
                     apiKey = apiKey.text.toString(),
                     enabledModels = enabledModels.text.toString(),
@@ -1489,38 +1503,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
         dialog.show()
-    }
-
-    private fun channelModeRow(providerType: EditText): View {
-        val currentMode = TextView(this).apply {
-            setTextColor(color(R.color.aib_text_secondary))
-            textSize = 13f
-            setPadding(0, 0, 0, dp(8))
-        }
-
-        fun renderMode() {
-            currentMode.text = getString(R.string.channel_mode_current, channelModeLabel(providerType.text.toString()))
-        }
-        fun setMode(type: String) {
-            providerType.setText(type)
-            renderMode()
-        }
-
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(currentMode)
-            addView(dialogButtonGrid(
-                listOf(
-                    UiAction(R.string.channel_mode_image) {
-                        setMode("openai_compatible_image")
-                    },
-                    UiAction(R.string.channel_mode_video) {
-                        setMode("openai_compatible_video")
-                    },
-                ),
-            ))
-            renderMode()
-        }
     }
 
     private fun extraModeRow(
@@ -1657,7 +1639,6 @@ class MainActivity : AppCompatActivity() {
         dialog: AlertDialog,
         existing: ProviderChannel?,
         name: String,
-        providerType: String,
         baseUrl: String,
         apiKey: String,
         enabledModels: String,
@@ -1667,7 +1648,7 @@ class MainActivity : AppCompatActivity() {
         enabled: Boolean,
     ) {
         val cleanName = name.trim()
-        val cleanProviderType = providerType.trim()
+        val cleanProviderType = "openai_compatible_image"
         if (cleanName.isBlank() || cleanProviderType.isBlank()) {
             Toast.makeText(this, R.string.channel_required_fields, Toast.LENGTH_SHORT).show()
             return
@@ -1802,9 +1783,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val KEY_TAB = "current_tab"
         private const val MAX_VISIBLE_MODELS = 200
-        private const val KEY_VIDEO_PROVIDER = "video_provider"
-        private const val VIDEO_PROVIDER_GROK = "grok"
-        private const val VIDEO_PROVIDER_SEEDANCE = "seedance"
         private const val REQUEST_WRITE_EXTERNAL_STORAGE = 2001
     }
 
