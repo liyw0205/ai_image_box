@@ -27,7 +27,9 @@ class OpenAICompatibleImageAdapter(
         val apiKey = decryptApiKey(channel)
         val secrets = listOf(apiKey)
         val url = endpoint(channel.baseUrl, "/v1/models")
-            ?: return@withContext ModelListResult(error = "Invalid base URL: ${safeBaseUrl(channel.baseUrl)}")
+            ?: return@withContext ModelListResult(
+                error = ProviderErrorLocalizer.localMessage("Invalid base URL: ${safeBaseUrl(channel.baseUrl)}"),
+            )
         val client = clientFor(channel.timeoutSeconds, channel.proxy)
         val httpRequest = Request.Builder()
             .url(url)
@@ -45,10 +47,11 @@ class OpenAICompatibleImageAdapter(
                 val elapsed = System.currentTimeMillis() - startedAt
 
                 if (!response.isSuccessful) {
+                    val errorMessage = ResponseParser.errorMessage(bodyText, secrets)
                     return@withContext ModelListResult(
                         requestId = requestId,
                         httpStatus = response.code,
-                        error = "HTTP ${response.code}: ${ResponseParser.errorMessage(bodyText, secrets)}",
+                        error = ProviderErrorLocalizer.httpError(response.code, errorMessage),
                         rawPreview = preview,
                         elapsedMillis = elapsed,
                     )
@@ -64,7 +67,7 @@ class OpenAICompatibleImageAdapter(
             }
         }.getOrElse { error ->
             ModelListResult(
-                error = ResponseParser.preview(error.message.orEmpty().ifBlank { error::class.java.simpleName }, secrets),
+                error = ResponseParser.preview(ProviderErrorLocalizer.networkError(error), secrets),
                 elapsedMillis = System.currentTimeMillis() - startedAt,
             )
         }
@@ -82,7 +85,7 @@ class OpenAICompatibleImageAdapter(
             return@withContext failedResult(
                 channel = channel,
                 target = target,
-                error = "OpenAI-compatible image adapter only supports TEXT_TO_IMAGE.",
+                error = ProviderErrorLocalizer.localMessage("OpenAI-compatible image adapter only supports TEXT_TO_IMAGE."),
                 startedAt = startedAt,
             )
         }
@@ -90,7 +93,7 @@ class OpenAICompatibleImageAdapter(
             return@withContext failedResult(
                 channel = channel,
                 target = target,
-                error = "Prompt is required.",
+                error = ProviderErrorLocalizer.localMessage("Prompt is required."),
                 startedAt = startedAt,
             )
         }
@@ -99,7 +102,9 @@ class OpenAICompatibleImageAdapter(
             ?: return@withContext failedResult(
                 channel = channel,
                 target = target,
-                error = "Invalid base URL: ${safeBaseUrl(target.baseUrl.ifBlank { channel.baseUrl })}",
+                error = ProviderErrorLocalizer.localMessage(
+                    "Invalid base URL: ${safeBaseUrl(target.baseUrl.ifBlank { channel.baseUrl })}",
+                ),
                 startedAt = startedAt,
             )
         val client = clientFor(target.timeoutSeconds, target.proxy.ifBlank { channel.proxy })
@@ -121,10 +126,11 @@ class OpenAICompatibleImageAdapter(
                 val elapsed = System.currentTimeMillis() - startedAt
 
                 if (!response.isSuccessful) {
+                    val errorMessage = ResponseParser.errorMessage(bodyText, secrets)
                     return@withContext failedResult(
                         channel = channel,
                         target = target,
-                        error = "HTTP ${response.code}: ${ResponseParser.errorMessage(bodyText, secrets)}",
+                        error = ProviderErrorLocalizer.httpError(response.code, errorMessage),
                         startedAt = startedAt,
                         httpStatus = response.code,
                         requestId = requestId,
@@ -137,7 +143,9 @@ class OpenAICompatibleImageAdapter(
                     return@withContext failedResult(
                         channel = channel,
                         target = target,
-                        error = "Provider response did not contain b64_json or url image data.",
+                        error = ProviderErrorLocalizer.localMessage(
+                            "Provider response did not contain b64_json or url image data.",
+                        ),
                         startedAt = startedAt,
                         httpStatus = response.code,
                         requestId = requestId,
@@ -152,7 +160,9 @@ class OpenAICompatibleImageAdapter(
                     return@withContext failedResult(
                         channel = channel,
                         target = target,
-                        error = "Provider returned image references, but all downloads or decodes failed.",
+                        error = ProviderErrorLocalizer.localMessage(
+                            "Provider returned image references, but all downloads or decodes failed.",
+                        ),
                         startedAt = startedAt,
                         httpStatus = response.code,
                         requestId = requestId,
@@ -185,7 +195,7 @@ class OpenAICompatibleImageAdapter(
             failedResult(
                 channel = channel,
                 target = target,
-                error = ResponseParser.preview(error.message.orEmpty().ifBlank { error::class.java.simpleName }, secrets),
+                error = ResponseParser.preview(ProviderErrorLocalizer.networkError(error), secrets),
                 startedAt = startedAt,
             )
         }
