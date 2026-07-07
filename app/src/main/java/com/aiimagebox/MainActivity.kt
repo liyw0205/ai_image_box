@@ -1370,23 +1370,45 @@ class MainActivity : AppCompatActivity() {
         typeOverrides: Map<String, String> = emptyMap(),
     ): String {
         val extra = runCatching { JSONObject(extraJson.ifBlank { "{}" }) }.getOrElse { JSONObject() }
+        val existingTypes = modelTypeOverrides(extraJson)
         val modelTypes = JSONObject()
         models.forEach { model ->
-            val typeKey = typeOverrides[model]?.takeIf { it.isNotBlank() } ?: inferModelInterfaceType(model).key
+            val typeKey = typeOverrides[model]?.takeIf { it.isNotBlank() }
+                ?: existingTypes[model]?.takeIf { it.isNotBlank() }
+                ?: inferModelInterfaceType(model).key
             modelTypes.put(model, typeKey)
         }
         extra.put("model_types", modelTypes)
         return extra.toString()
     }
 
+    private fun parseModelNames(value: String): List<String> {
+        return value
+            .split(',', '\n')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
     private fun channelModeLabel(channel: ProviderChannel): String {
-        val type = channel.providerType.lowercase()
-        if ("video" !in type) return getString(R.string.channel_mode_image)
+        if (!isVideoProviderType(channel.providerType)) return getString(R.string.channel_mode_image)
         return when (videoProviderKey(channel.extraJson)) {
             VIDEO_PROVIDER_SEEDANCE -> getString(R.string.channel_mode_seedance_video)
             VIDEO_PROVIDER_GROK -> getString(R.string.channel_mode_grok_video)
             else -> getString(R.string.channel_mode_video)
         }
+    }
+
+    private fun channelModeLabel(providerType: String): String {
+        return if (isVideoProviderType(providerType)) {
+            getString(R.string.channel_mode_video)
+        } else {
+            getString(R.string.channel_mode_image)
+        }
+    }
+
+    private fun isVideoProviderType(providerType: String): Boolean {
+        return "video" in providerType.lowercase()
     }
 
     private fun videoProviderKey(extraJson: String): String {
@@ -1395,15 +1417,12 @@ class MainActivity : AppCompatActivity() {
         }.getOrDefault("")
     }
 
-    private fun setExtraJsonValue(extra: EditText, key: String, value: String?) {
-        val json = runCatching { JSONObject(extra.text?.toString().orEmpty().ifBlank { "{}" }) }
-            .getOrElse { JSONObject() }
-        if (value == null) {
-            json.remove(key)
-        } else {
-            json.put(key, value)
-        }
-        extra.setText(json.toString())
+    private fun syncExtraModelTypes(
+        extra: EditText,
+        models: List<String>,
+        typeOverrides: Map<String, String>,
+    ) {
+        extra.setText(withModelTypes(extra.text?.toString().orEmpty().ifBlank { "{}" }, models, typeOverrides))
     }
 
     private fun showChannelDialog(existing: ProviderChannel?) {
@@ -1413,7 +1432,6 @@ class MainActivity : AppCompatActivity() {
         val apiKey = editText(R.string.field_api_key, "")
         apiKey.hint = if (existing?.apiKey != null) getString(R.string.field_api_key_saved_hint) else getString(R.string.field_api_key)
         apiKey.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        val defaultModel = editText(R.string.field_default_model, existing?.defaultModel.orEmpty())
         val enabledModels = editText(R.string.field_enabled_models, existing?.enabledModels?.joinToString(", ").orEmpty())
         val timeout = editText(R.string.field_timeout, (existing?.timeoutSeconds ?: 280).toString())
         timeout.inputType = InputType.TYPE_CLASS_NUMBER
@@ -1427,9 +1445,9 @@ class MainActivity : AppCompatActivity() {
             isChecked = existing?.enabled ?: true
             setPadding(0, dp(8), 0, dp(8))
         }
-        val channelMode = channelModeRow(providerType, extra)
-        val extraVisual = extraVisualPanel(providerType, extra)
-        val extraMode = extraModeRow(extraVisual, extra)
+        val channelMode = channelModeRow(providerType)
+        val extraVisualEditor = extraModelTypeVisualEditor(extra, enabledModels)
+        val extraMode = extraModeRow(extraVisualEditor.view, extra, extraVisualEditor.refresh)
 
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1438,12 +1456,11 @@ class MainActivity : AppCompatActivity() {
             addView(name)
             addView(baseUrl)
             addView(apiKey)
-            addView(defaultModel)
             addView(enabledModels)
             addView(timeout)
             addView(proxy)
             addView(extraMode)
-            addView(extraVisual)
+            addView(extraVisualEditor.view)
             addView(extra)
             addView(enabled)
         }
@@ -1463,7 +1480,6 @@ class MainActivity : AppCompatActivity() {
                     providerType = providerType.text.toString(),
                     baseUrl = baseUrl.text.toString(),
                     apiKey = apiKey.text.toString(),
-                    defaultModel = defaultModel.text.toString(),
                     enabledModels = enabledModels.text.toString(),
                     timeout = timeout.text.toString(),
                     proxy = proxy.text.toString(),
@@ -1475,24 +1491,43 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun channelModeRow(providerType: EditText, extra: EditText): View {
-        return dialogButtonGrid(
-            listOf(
-                UiAction(R.string.channel_mode_image) {
-                    providerType.setText("openai_compatible_image")
-                    setExtraJsonValue(extra, KEY_VIDEO_PROVIDER, null)
-                },
-                UiAction(R.string.channel_mode_video) {
-                    providerType.setText("openai_compatible_video")
-                    if (videoProviderKey(extra.text.toString()).isBlank()) {
-                        setExtraJsonValue(extra, KEY_VIDEO_PROVIDER, VIDEO_PROVIDER_GROK)
-                    }
-                },
-            ),
-        )
+    private fun channelModeRow(providerType: EditText): View {
+        val currentMode = TextView(this).apply {
+            setTextColor(color(R.color.aib_text_secondary))
+            textSize = 13f
+            setPadding(0, 0, 0, dp(8))
+        }
+
+        fun renderMode() {
+            currentMode.text = getString(R.string.channel_mode_current, channelModeLabel(providerType.text.toString()))
+        }
+        fun setMode(type: String) {
+            providerType.setText(type)
+            renderMode()
+        }
+
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(currentMode)
+            addView(dialogButtonGrid(
+                listOf(
+                    UiAction(R.string.channel_mode_image) {
+                        setMode("openai_compatible_image")
+                    },
+                    UiAction(R.string.channel_mode_video) {
+                        setMode("openai_compatible_video")
+                    },
+                ),
+            ))
+            renderMode()
+        }
     }
 
-    private fun extraModeRow(visualPanel: View, jsonEditor: EditText): View {
+    private fun extraModeRow(
+        visualPanel: View,
+        jsonEditor: EditText,
+        refreshVisual: () -> Unit,
+    ): View {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(8), 0, 0)
@@ -1508,6 +1543,7 @@ class MainActivity : AppCompatActivity() {
                     UiAction(R.string.extra_mode_visual) {
                         jsonEditor.visibility = View.GONE
                         visualPanel.visibility = View.VISIBLE
+                        refreshVisual()
                     },
                     UiAction(R.string.extra_mode_json) {
                         visualPanel.visibility = View.GONE
@@ -1518,64 +1554,79 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun extraVisualPanel(providerType: EditText, extra: EditText): View {
-        return LinearLayout(this).apply {
+    private fun extraModelTypeVisualEditor(
+        extra: EditText,
+        enabledModels: EditText,
+    ): ExtraVisualEditor {
+        val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(TextView(this@MainActivity).apply {
+        }
+        fun render() {
+            val models = parseModelNames(enabledModels.text?.toString().orEmpty())
+            val selectedTypes = modelTypeOverrides(extra.text?.toString().orEmpty()).toMutableMap()
+            panel.removeAllViews()
+            panel.addView(TextView(this).apply {
                 text = getString(R.string.extra_visual_hint)
                 setTextColor(color(R.color.aib_text_secondary))
                 textSize = 13f
                 setPadding(0, 0, 0, dp(8))
             })
-            addView(dialogButtonGrid(
-                listOf(
-                    UiAction(R.string.channel_mode_image) {
-                        providerType.setText("openai_compatible_image")
-                        setExtraJsonValue(extra, KEY_VIDEO_PROVIDER, null)
-                    },
-                    UiAction(R.string.channel_mode_grok_video) {
-                        providerType.setText("openai_compatible_video")
-                        setExtraJsonValue(extra, KEY_VIDEO_PROVIDER, VIDEO_PROVIDER_GROK)
-                    },
-                    UiAction(R.string.channel_mode_seedance_video) {
-                        providerType.setText("openai_compatible_video")
-                        setExtraJsonValue(extra, KEY_VIDEO_PROVIDER, VIDEO_PROVIDER_SEEDANCE)
-                    },
-                ),
-            ))
+            if (models.isEmpty()) {
+                panel.addView(TextView(this).apply {
+                    text = getString(R.string.extra_visual_no_models)
+                    setTextColor(color(R.color.aib_text_secondary))
+                    textSize = 14f
+                    setPadding(0, dp(4), 0, dp(12))
+                })
+                return
+            }
+            models.forEach { model ->
+                val modelType = modelInterfaceTypeFor(model, selectedTypes[model])
+                panel.addView(LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(0, dp(8), 0, dp(8))
+                    addView(TextView(this@MainActivity).apply {
+                        text = model
+                        setTextColor(color(R.color.aib_text))
+                        textSize = 14f
+                        maxLines = 5
+                    })
+                    addView(LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        setPadding(0, dp(4), 0, 0)
+                        addView(TextView(this@MainActivity).apply {
+                            text = getString(R.string.channel_model_type_row, modelType.label)
+                            setTextColor(color(R.color.aib_text_secondary))
+                            textSize = 13f
+                            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                        })
+                        addView(MaterialButton(this@MainActivity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                            text = getString(R.string.action_change_model_type)
+                            setTextColor(color(R.color.aib_text))
+                            minHeight = dp(38)
+                            minimumHeight = dp(38)
+                            isAllCaps = false
+                            setSingleLine(false)
+                            maxLines = 2
+                            layoutParams = LinearLayout.LayoutParams(dp(96), ViewGroup.LayoutParams.WRAP_CONTENT)
+                            setOnClickListener {
+                                showModelTypeDialog(model, selectedTypes) {
+                                    syncExtraModelTypes(extra, models, selectedTypes)
+                                    render()
+                                }
+                            }
+                        })
+                    })
+                })
+            }
         }
-    }
-
-    private fun channelTemplateRow(
-        name: EditText,
-        providerType: EditText,
-        baseUrl: EditText,
-        defaultModel: EditText,
-        enabledModels: EditText,
-    ): View {
-        return dialogButtonGrid(
-            CHANNEL_TEMPLATES.map { template ->
-                UiAction(template.labelRes) {
-                    if (name.text.isBlank()) name.setText(getString(template.labelRes))
-                    providerType.setText(template.providerType)
-                    baseUrl.setText(template.baseUrl)
-                    defaultModel.setText(template.defaultModel)
-                    if (enabledModels.text.isBlank() && template.defaultModel.isNotBlank()) {
-                        enabledModels.setText(template.defaultModel)
-                    }
-                }
-            },
-        )
-    }
-
-    private fun providerTypePresetRow(providerType: EditText): View {
-        return dialogButtonGrid(
-            PROVIDER_TYPE_PRESETS.map { preset ->
-                UiAction(preset.labelRes) {
-                    providerType.setText(preset.providerType)
-                }
-            },
-        )
+        enabledModels.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) = render()
+        })
+        render()
+        return ExtraVisualEditor(panel, ::render)
     }
 
     private fun dialogButtonGrid(actions: List<UiAction>, columns: Int = 2): View {
@@ -1609,7 +1660,6 @@ class MainActivity : AppCompatActivity() {
         providerType: String,
         baseUrl: String,
         apiKey: String,
-        defaultModel: String,
         enabledModels: String,
         timeout: String,
         proxy: String,
@@ -1648,14 +1698,14 @@ class MainActivity : AppCompatActivity() {
             .split(',', '\n')
             .map { it.trim() }
             .filter { it.isNotBlank() }
-        val modelTypeSource = modelList.ifEmpty { listOf(defaultModel.trim()).filter { it.isNotBlank() } }
+        val modelTypeSource = modelList
         val channel = ProviderChannel(
             id = existing?.id ?: java.util.UUID.randomUUID().toString(),
             name = cleanName,
             providerType = cleanProviderType,
             baseUrl = cleanBaseUrl,
             apiKey = encryptedKey,
-            defaultModel = defaultModel.trim(),
+            defaultModel = modelList.firstOrNull().orEmpty(),
             enabledModels = modelList,
             timeoutSeconds = timeout.toIntOrNull()?.coerceIn(10, 900) ?: 280,
             enabled = enabled,
@@ -1755,47 +1805,8 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_VIDEO_PROVIDER = "video_provider"
         private const val VIDEO_PROVIDER_GROK = "grok"
         private const val VIDEO_PROVIDER_SEEDANCE = "seedance"
-        private val CHANNEL_TEMPLATES = listOf(
-            ChannelTemplate(
-                labelRes = R.string.channel_template_openai,
-                providerType = "openai_compatible_image",
-                baseUrl = "https://api.openai.com",
-                defaultModel = "gpt-image-1",
-            ),
-            ChannelTemplate(
-                labelRes = R.string.channel_template_compatible,
-                providerType = "openai_compatible_image",
-                baseUrl = "",
-                defaultModel = "",
-            ),
-            ChannelTemplate(
-                labelRes = R.string.channel_template_local,
-                providerType = "openai_compatible_image",
-                baseUrl = "http://127.0.0.1:8000",
-                defaultModel = "",
-            ),
-        )
-        private val PROVIDER_TYPE_PRESETS = listOf(
-            ProviderTypePreset(R.string.channel_provider_openai_image, "openai_compatible_image"),
-            ProviderTypePreset(R.string.channel_provider_gemini_image, "gemini_image"),
-            ProviderTypePreset(R.string.channel_provider_agnes_image, "agnes_image"),
-            ProviderTypePreset(R.string.channel_provider_grok_image, "grok_image"),
-            ProviderTypePreset(R.string.channel_provider_video, "openai_compatible_video"),
-        )
         private const val REQUEST_WRITE_EXTERNAL_STORAGE = 2001
     }
-
-    private data class ChannelTemplate(
-        val labelRes: Int,
-        val providerType: String,
-        val baseUrl: String,
-        val defaultModel: String,
-    )
-
-    private data class ProviderTypePreset(
-        val labelRes: Int,
-        val providerType: String,
-    )
 
     private data class ModelInterfaceType(
         val key: String,
@@ -1805,5 +1816,10 @@ class MainActivity : AppCompatActivity() {
     private data class UiAction(
         val textRes: Int,
         val onClick: () -> Unit,
+    )
+
+    private data class ExtraVisualEditor(
+        val view: View,
+        val refresh: () -> Unit,
     )
 }

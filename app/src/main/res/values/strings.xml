@@ -62,7 +62,6 @@
     <string name="field_base_url">Base URL</string>
     <string name="field_api_key">API Key</string>
     <string name="field_api_key_saved_hint">留空表示保留已保存 API Key</string>
-    <string name="field_default_model">默认模型</string>
     <string name="field_enabled_models">启用模型，用逗号或换行分隔</string>
     <string name="field_timeout">超时秒数，10-900</string>
     <string name="field_proxy">代理，可留空</string>
@@ -71,11 +70,13 @@
     <string name="field_extra_visual">扩展配置</string>
     <string name="extra_mode_visual">可视化</string>
     <string name="extra_mode_json">JSON</string>
-    <string name="extra_visual_hint">可视化选择会同步写入扩展 JSON，切到 JSON 可手动修改。</string>
+    <string name="extra_visual_hint">这里用于修改已配置模型的类型，保存时会同步写入扩展 JSON。</string>
+    <string name="extra_visual_no_models">暂无已配置模型。请先拉取模型或在“启用模型”中填写模型名。</string>
     <string name="channel_mode_image">图片</string>
     <string name="channel_mode_video">视频</string>
     <string name="channel_mode_grok_video">Grok 视频</string>
     <string name="channel_mode_seedance_video">Seedance 视频</string>
+    <string name="channel_mode_current">当前渠道类型：%1$s</string>
     <string name="studio_channel_mode">模式：%1$s</string>
     <string name="channel_template_openai">OpenAI</string>
     <string name="channel_template_compatible">兼容接口</string>
