@@ -21,7 +21,7 @@
 
 ## 0.2.0 渠道管理
 
-状态：基础渠道管理已完成。已实现 `ProviderChannel`、`ModelTarget`、`channels.json`、Android Keystore API Key 加密保存、渠道新增、编辑、复制、启用、禁用、删除和渠道页列表。测试连接和模型列表下沉到 0.2.1。
+状态：基础渠道管理已完成。已实现 `ProviderChannel`、`ModelTarget`、`channels.json`、Android Keystore API Key 加密保存、渠道新增、编辑、复制、启用、禁用、删除、渠道页列表、provider 模板、Base URL 基础校验，以及上游模型拉取、筛选和保存到启用模型。
 
 目标：本地可配置 provider。
 
@@ -40,7 +40,7 @@
 
 ## 0.3.0 文生图
 
-状态：初版已完成。已接入 `StudioForm` 创作表单、`GenerationManager` 队列、`GenerationStore` 任务/历史持久化、OpenAI-compatible `/v1/images/generations` 文生图、结果图片落盘、任务页队列状态、历史页最近记录和渠道模型列表测试。
+状态：初版已完成。已接入 `StudioForm` 创作表单、`GenerationManager` 队列、`GenerationStore` 任务/历史持久化、OpenAI-compatible `/v1/images/generations` 文生图、结果图片落盘、任务页队列状态、历史页最近记录和渠道模型列表拉取/筛选/保存。
 
 目标：完成第一条端到端生成链路。
 
@@ -188,6 +188,6 @@
 ## 当前下一步
 
 1. 开始 0.3.5 真机接口实测和渠道配置体验优化。
-2. 修复渠道测试、文生图提交、任务/历史刷新和图片落盘中的真机问题。
-3. 为渠道配置补 Base URL/模型/API Key 快速校验和模板。
+2. 修复模型拉取、文生图提交、任务/历史刷新和图片落盘中的真机问题。
+3. 为渠道配置补 API Key 快速校验、provider 模板扩展和常见接口预设。
 4. 为 0.4.0 图生图准备参考图选择和 `images/edits` adapter。

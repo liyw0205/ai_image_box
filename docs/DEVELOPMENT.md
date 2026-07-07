@@ -2,7 +2,7 @@
 
 ## 当前仓库状态
 
-`https://github.com/liyw0205/ai_image_box` 已进入 Android 原生工程开发。0.3.4 文生图初版增强已经完成，包含四 Tab 主界面、创作表单、任务队列取消/重试/清理、重启恢复、常见 provider 错误中文化、失败响应预览详情、历史缩略图、参数复用、多图结果落盘、基础渠道管理、模型列表测试、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
+`https://github.com/liyw0205/ai_image_box` 已进入 Android 原生工程开发。0.3.4 文生图初版增强已经完成，包含四 Tab 主界面、创作表单、任务队列取消/重试/清理、重启恢复、常见 provider 错误中文化、失败响应预览详情、历史缩略图、参数复用、多图结果落盘、基础渠道管理、provider 模板、Base URL 基础校验、上游模型拉取/筛选/保存、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
 
 ```text
 /data/data/com.termux/files/home/devwork/ai_image_box

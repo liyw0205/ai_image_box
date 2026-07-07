@@ -4,9 +4,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.os.Bundle
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -38,6 +41,7 @@ import com.aiimagebox.generation.GenerationQueueItem
 import com.aiimagebox.generation.GenerationRequest
 import com.aiimagebox.generation.GenerationStatus as QueueGenerationStatus
 import com.aiimagebox.generation.GenerationTarget
+import com.aiimagebox.provider.ModelListResult
 import com.aiimagebox.provider.ProviderRegistry
 import com.aiimagebox.ui.StudioForm
 import com.google.android.material.button.MaterialButton
@@ -51,6 +55,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.net.URI
 import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
@@ -839,7 +844,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, dp(12), 0, 0)
         }
         row.addView(actionButton(R.string.action_edit) { showChannelDialog(channel) })
-        row.addView(actionButton(R.string.action_test_models) { testChannelModels(channel) })
+        row.addView(actionButton(R.string.action_fetch_models) { fetchChannelModels(channel) })
         row.addView(actionButton(if (channel.enabled) R.string.action_disable else R.string.action_enable) {
             channelStore.setEnabled(channel.id, !channel.enabled)
             renderChannelList()
@@ -881,7 +886,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun testChannelModels(channel: ProviderChannel) {
+    private fun fetchChannelModels(channel: ProviderChannel) {
         val adapter = ProviderRegistry.forChannel(channel)
         if (adapter == null) {
             Toast.makeText(this, getString(R.string.channel_test_no_adapter, channel.providerType), Toast.LENGTH_LONG).show()
@@ -898,26 +903,189 @@ class MainActivity : AppCompatActivity() {
                     .show()
                 return@launch
             }
-            val modelsText = result.models
-                .take(50)
-                .joinToString("\n") { it.id }
-                .ifBlank { "-" }
-            val message = if (result.models.isEmpty()) {
-                getString(R.string.channel_test_empty, result.httpStatus?.toString() ?: "-", result.elapsedMillis)
+            if (result.models.isEmpty()) {
+                MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle(R.string.channel_test_success_title)
+                    .setMessage(getString(R.string.channel_test_empty, result.httpStatus?.toString() ?: "-", result.elapsedMillis))
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
             } else {
-                getString(
-                    R.string.channel_test_models,
-                    result.httpStatus?.toString() ?: "-",
-                    result.elapsedMillis,
-                    result.models.size,
-                    modelsText,
-                )
+                showModelPicker(channel, result)
             }
-            MaterialAlertDialogBuilder(this@MainActivity)
-                .setTitle(R.string.channel_test_success_title)
-                .setMessage(message)
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
+        }
+    }
+
+    private fun showModelPicker(channel: ProviderChannel, result: ModelListResult) {
+        val models = result.models
+            .map { it.id.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+        val selected = channel.enabledModels
+            .ifEmpty { listOf(channel.defaultModel) }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .filter { it in models }
+            .toMutableSet()
+
+        val status = TextView(this).apply {
+            setTextColor(color(R.color.aib_text_secondary))
+            textSize = 14f
+            text = getString(
+                R.string.channel_model_picker_summary,
+                result.httpStatus?.toString() ?: "-",
+                result.elapsedMillis,
+                models.size,
+            )
+        }
+        val filter = editText(R.string.field_model_filter, "")
+        filter.setSingleLine(true)
+        val count = TextView(this).apply {
+            setTextColor(color(R.color.aib_text_secondary))
+            textSize = 13f
+            setPadding(0, 0, 0, dp(8))
+        }
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val scroll = ScrollView(this).apply {
+            addView(list)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(360),
+            )
+        }
+
+        fun filteredModels(): List<String> {
+            val terms = filter.text.toString()
+                .split(' ', ',', '\n', '\t')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+            if (terms.isEmpty()) return models
+            return models.filter { model ->
+                terms.all { term -> model.contains(term, ignoreCase = true) }
+            }
+        }
+
+        fun renderModels() {
+            val filtered = filteredModels()
+            list.removeAllViews()
+            count.text = getString(
+                R.string.channel_model_filter_count,
+                filtered.size,
+                models.size,
+                selected.size,
+            )
+            if (filtered.isEmpty()) {
+                list.addView(TextView(this).apply {
+                    text = getString(R.string.channel_model_filter_empty)
+                    setTextColor(color(R.color.aib_text_secondary))
+                    textSize = 14f
+                    setPadding(0, dp(12), 0, dp(12))
+                })
+                return
+            }
+            filtered.take(MAX_VISIBLE_MODELS).forEach { model ->
+                list.addView(CheckBox(this).apply {
+                    text = model
+                    setTextColor(color(R.color.aib_text))
+                    textSize = 14f
+                    isChecked = model in selected
+                    setPadding(0, dp(4), 0, dp(4))
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) {
+                            selected.add(model)
+                        } else {
+                            selected.remove(model)
+                        }
+                        count.text = getString(
+                            R.string.channel_model_filter_count,
+                            filtered.size,
+                            models.size,
+                            selected.size,
+                        )
+                    }
+                })
+            }
+            if (filtered.size > MAX_VISIBLE_MODELS) {
+                list.addView(TextView(this).apply {
+                    text = getString(R.string.channel_model_filter_limited, MAX_VISIBLE_MODELS, filtered.size)
+                    setTextColor(color(R.color.aib_text_secondary))
+                    textSize = 13f
+                    setPadding(0, dp(8), 0, 0)
+                })
+            }
+        }
+
+        val quickActions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 0, 0, dp(8))
+            addView(dialogButton(R.string.action_select_visible) {
+                selected.addAll(filteredModels().take(MAX_VISIBLE_MODELS))
+                renderModels()
+            })
+            addView(dialogButton(R.string.action_clear_visible) {
+                selected.removeAll(filteredModels().take(MAX_VISIBLE_MODELS).toSet())
+                renderModels()
+            })
+        }
+        filter.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = renderModels()
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(4), dp(2), dp(4), dp(2))
+            addView(status)
+            addView(filter)
+            addView(quickActions)
+            addView(count)
+            addView(scroll)
+        }
+        renderModels()
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.channel_model_picker_title, channel.name))
+            .setView(form)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.action_save_models, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val enabledModels = models.filter { it in selected }
+                if (enabledModels.isEmpty()) {
+                    Toast.makeText(this, R.string.channel_models_select_required, Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                val latest = channelStore.load().firstOrNull { it.id == channel.id } ?: channel
+                val defaultModel = latest.defaultModel.takeIf { it in enabledModels } ?: enabledModels.first()
+                channelStore.upsert(
+                    latest.copy(
+                        defaultModel = defaultModel,
+                        enabledModels = enabledModels,
+                    ),
+                )
+                dialog.dismiss()
+                renderChannelList()
+                bindStudioChannels()
+                Toast.makeText(this, getString(R.string.channel_models_saved, enabledModels.size), Toast.LENGTH_SHORT).show()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun dialogButton(textRes: Int, onClick: () -> Unit): MaterialButton {
+        return MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = getString(textRes)
+            setTextColor(color(R.color.aib_text))
+            minHeight = dp(38)
+            minimumHeight = dp(38)
+            isAllCaps = false
+            setOnClickListener { onClick() }
+            layoutParams = LinearLayout.LayoutParams(0, dp(40), 1f).apply {
+                marginEnd = dp(8)
+            }
         }
     }
 
@@ -941,10 +1109,18 @@ class MainActivity : AppCompatActivity() {
             isChecked = existing?.enabled ?: true
             setPadding(0, dp(8), 0, dp(8))
         }
+        val templates = channelTemplateRow(
+            name = name,
+            providerType = providerType,
+            baseUrl = baseUrl,
+            defaultModel = defaultModel,
+            enabledModels = enabledModels,
+        )
 
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(4), dp(2), dp(4), dp(2))
+            addView(templates)
             addView(name)
             addView(providerType)
             addView(baseUrl)
@@ -984,6 +1160,30 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    private fun channelTemplateRow(
+        name: EditText,
+        providerType: EditText,
+        baseUrl: EditText,
+        defaultModel: EditText,
+        enabledModels: EditText,
+    ): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 0, 0, dp(8))
+            CHANNEL_TEMPLATES.forEach { template ->
+                addView(dialogButton(template.labelRes) {
+                    if (name.text.isBlank()) name.setText(getString(template.labelRes))
+                    providerType.setText(template.providerType)
+                    baseUrl.setText(template.baseUrl)
+                    defaultModel.setText(template.defaultModel)
+                    if (enabledModels.text.isBlank() && template.defaultModel.isNotBlank()) {
+                        enabledModels.setText(template.defaultModel)
+                    }
+                })
+            }
+        }
+    }
+
     private fun saveChannelFromDialog(
         dialog: AlertDialog,
         existing: ProviderChannel?,
@@ -1004,6 +1204,17 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.channel_required_fields, Toast.LENGTH_SHORT).show()
             return
         }
+        val cleanBaseUrl = baseUrl.trim().trimEnd('/')
+        if (ProviderRegistry.get(cleanProviderType) != null) {
+            if (cleanBaseUrl.isBlank()) {
+                Toast.makeText(this, R.string.channel_base_url_required, Toast.LENGTH_SHORT).show()
+                return
+            }
+            if (!isValidHttpBaseUrl(cleanBaseUrl)) {
+                Toast.makeText(this, R.string.channel_invalid_base_url, Toast.LENGTH_SHORT).show()
+                return
+            }
+        }
         val cleanExtra = extra.trim().ifBlank { "{}" }
         if (runCatching { JSONObject(cleanExtra) }.isFailure) {
             Toast.makeText(this, R.string.channel_invalid_extra, Toast.LENGTH_SHORT).show()
@@ -1023,7 +1234,7 @@ class MainActivity : AppCompatActivity() {
             id = existing?.id ?: java.util.UUID.randomUUID().toString(),
             name = cleanName,
             providerType = cleanProviderType,
-            baseUrl = baseUrl.trim(),
+            baseUrl = cleanBaseUrl,
             apiKey = encryptedKey,
             defaultModel = defaultModel.trim(),
             enabledModels = modelList,
@@ -1037,6 +1248,12 @@ class MainActivity : AppCompatActivity() {
         dialog.dismiss()
         renderChannelList()
         bindStudioChannels()
+    }
+
+    private fun isValidHttpBaseUrl(value: String): Boolean {
+        val uri = runCatching { URI(value) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase()
+        return (scheme == "http" || scheme == "https") && !uri.host.isNullOrBlank()
     }
 
     private fun editText(labelRes: Int, value: String): EditText {
@@ -1115,5 +1332,33 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val KEY_TAB = "current_tab"
+        private const val MAX_VISIBLE_MODELS = 200
+        private val CHANNEL_TEMPLATES = listOf(
+            ChannelTemplate(
+                labelRes = R.string.channel_template_openai,
+                providerType = "openai_compatible_image",
+                baseUrl = "https://api.openai.com",
+                defaultModel = "gpt-image-1",
+            ),
+            ChannelTemplate(
+                labelRes = R.string.channel_template_compatible,
+                providerType = "openai_compatible_image",
+                baseUrl = "",
+                defaultModel = "",
+            ),
+            ChannelTemplate(
+                labelRes = R.string.channel_template_local,
+                providerType = "openai_compatible_image",
+                baseUrl = "http://127.0.0.1:8000",
+                defaultModel = "",
+            ),
+        )
     }
+
+    private data class ChannelTemplate(
+        val labelRes: Int,
+        val providerType: String,
+        val baseUrl: String,
+        val defaultModel: String,
+    )
 }

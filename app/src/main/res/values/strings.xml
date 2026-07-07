@@ -47,6 +47,8 @@
     <string name="channel_key_saved">已加密保存</string>
     <string name="channel_key_empty">未保存</string>
     <string name="channel_required_fields">渠道名和 provider 类型必填。</string>
+    <string name="channel_base_url_required">当前 provider 需要填写 Base URL。</string>
+    <string name="channel_invalid_base_url">Base URL 必须是有效的 http 或 https 地址。</string>
     <string name="channel_invalid_extra">扩展 JSON 格式不正确。</string>
     <string name="channel_key_encrypt_failed">API Key 加密失败：%1$s</string>
 
@@ -66,10 +68,14 @@
     <string name="field_proxy">代理，可留空</string>
     <string name="field_extra_json">扩展 JSON</string>
     <string name="field_enabled">启用渠道</string>
+    <string name="channel_template_openai">OpenAI</string>
+    <string name="channel_template_compatible">兼容接口</string>
+    <string name="channel_template_local">本地接口</string>
 
     <string name="action_save">保存</string>
     <string name="action_edit">编辑</string>
     <string name="action_test_models">测试</string>
+    <string name="action_fetch_models">模型</string>
     <string name="action_disable">禁用</string>
     <string name="action_enable">启用</string>
     <string name="action_copy">复制</string>
@@ -85,6 +91,17 @@
     <string name="channel_test_success_title">渠道测试成功</string>
     <string name="channel_test_empty">接口连通，但没有返回模型列表。\nHTTP：%1$s\n耗时：%2$d ms</string>
     <string name="channel_test_models">HTTP：%1$s\n耗时：%2$d ms\n模型数：%3$d\n\n%4$s</string>
+    <string name="channel_model_picker_title">选择“%1$s”的模型</string>
+    <string name="channel_model_picker_summary">HTTP：%1$s · 耗时：%2$d ms · 上游模型：%3$d</string>
+    <string name="field_model_filter">筛选模型，支持空格分词</string>
+    <string name="channel_model_filter_count">匹配 %1$d / %2$d，已选 %3$d</string>
+    <string name="channel_model_filter_empty">没有匹配的模型。</string>
+    <string name="channel_model_filter_limited">仅显示前 %1$d 个匹配项，共 %2$d 个；继续输入关键字可缩小范围。</string>
+    <string name="action_select_visible">全选当前</string>
+    <string name="action_clear_visible">清空当前</string>
+    <string name="action_save_models">保存模型</string>
+    <string name="channel_models_saved">已保存 %1$d 个启用模型。</string>
+    <string name="channel_models_select_required">请至少选择一个模型。</string>
 
     <string name="studio_generate_no_channel">渠道不存在或已被删除。</string>
     <string name="studio_generate_enqueued">任务已加入队列：%1$s</string>
