@@ -157,6 +157,17 @@
 - 生成管理器根据是否存在参考图自动切换 `TEXT_TO_IMAGE` / `IMAGE_TO_IMAGE`。
 - OpenAI-compatible 图生图初版使用首张参考图作为 `image` 表单字段。
 
+## 0.3.10 多图像 provider 初接入
+
+状态：初版已完成。模型类型 `gemini_image`、`agnes_image`、`grok_image` 已接入 provider registry，创作页按模型级类型路由到对应适配器；Gemini 和 Agnes 支持参考图，Grok 先支持文生图。
+
+目标：让“模型类型”不只停留在配置层，而是能实际决定请求格式。
+
+- Gemini 使用 `generateContent` JSON 请求，参考图写入 `inline_data`。
+- Agnes 使用 OpenAI-like `/v1/images/generations`，参考图以 data URL 写入 `extra_body.image`。
+- Grok 使用 `/v1/images/generations`，写入 `aspect_ratio`、`resolution` 和 `response_format`。
+- `ProviderRegistry.targetsFor` 会读取 `extra.model_types`，为后续自动回退和模型优先级打基础。
+
 ## 0.4.0 图生图和多 provider 回退
 
 目标：迁移插件的主要生图能力。
@@ -243,7 +254,7 @@
 
 ## 当前下一步
 
-1. 开始 0.3.9 真机接口实测和渠道配置体验优化。
-2. 修复公共导出、模型拉取、文生图提交、任务/历史刷新和图片落盘中的真机问题。
-3. 为渠道配置补 API Key 快速校验和更多常见接口预设。
-4. 为 0.4.0 图生图准备参考图选择和 `images/edits` adapter。
+1. 开始 0.3.10 真机接口实测，重点验证 OpenAI-compatible、Gemini、Agnes、Grok 的请求格式。
+2. 补自动回退：按启用模型顺序展开目标，失败后尝试下一个可用模型。
+3. 为渠道配置补 API Key 快速校验、更多常见接口预设和模型类型批量修改。
+4. 开始 0.5.0 生视频抽象，先落地 Grok/Seedance 的提交、轮询和下载流程。

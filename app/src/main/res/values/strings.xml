@@ -13,8 +13,8 @@
     <string name="badge_channels">多接口 provider 管理</string>
 
     <string name="studio_headline">统一的多接口创作工作台</string>
-    <string name="studio_body">当前已接入 OpenAI-compatible 文生图和图生图链路，可从启用渠道选择模型提交任务，生成结果会保存到本地缓存并进入历史。</string>
-    <string name="studio_status">已写入 channels.json、task_state.json、generation_records.jsonl 和生成文件缓存；后续继续补生视频和多 provider 回退。</string>
+    <string name="studio_body">当前已接入 OpenAI-compatible、Gemini、Agnes、Grok 图像链路，可从启用渠道选择模型提交任务，生成结果会保存到本地缓存并进入历史。</string>
+    <string name="studio_status">已写入 channels.json、task_state.json、generation_records.jsonl 和生成文件缓存；后续继续补生视频和自动回退。</string>
 
     <string name="tasks_headline">任务队列会承载长生图和异步生视频</string>
     <string name="tasks_body">队列会记录 Queued、Running、Polling、Downloading、Succeeded、Failed 和 Canceled 状态，并支持重试、取消和错误复现。</string>
@@ -25,7 +25,7 @@
     <string name="history_status">首版历史将使用本地 JSONL 文件，不先引入数据库，保持和 MediaVault 一样的轻量可维护策略。</string>
 
     <string name="channels_headline">渠道管理是多模型能力的核心</string>
-    <string name="channels_body">这里会添加 OpenAI-compatible、Gemini、Agnes、Grok 和异步视频 provider。API Key 将保存在本机加密存储，导出配置默认脱敏。</string>
+    <string name="channels_body">这里可配置 OpenAI-compatible、Gemini、Agnes、Grok 和后续异步视频 provider。API Key 将保存在本机加密存储，导出配置默认脱敏。</string>
     <string name="channels_status">产品不设置客户端 token 额度、日限额或固定子代理数量上限；只保留超时、并发、缓存和设备资源保护。</string>
 
     <string name="status_title">开发状态</string>
