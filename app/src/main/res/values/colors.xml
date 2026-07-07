@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="aib_bg">#0B1220</color>
+    <color name="aib_surface">#111827</color>
+    <color name="aib_surface2">#1F2937</color>
+    <color name="aib_line">#4B5563</color>
+    <color name="aib_text">#F9FAFB</color>
+    <color name="aib_text_secondary">#D1D5DB</color>
+    <color name="aib_hint">#9CA3AF</color>
+    <color name="aib_primary">#67E8F9</color>
+    <color name="aib_primary_dark">#0E7490</color>
+    <color name="aib_on_primary">#042F2E</color>
+    <color name="aib_danger">#FCA5A5</color>
+    <color name="aib_pill_bg">#173144</color>
+</resources>
+
