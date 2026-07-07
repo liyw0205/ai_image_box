@@ -33,7 +33,9 @@ import com.aiimagebox.data.SecureKeyStore
 import com.aiimagebox.generation.GenerationEvent
 import com.aiimagebox.generation.GenerationManager
 import com.aiimagebox.generation.GenerationParameters
+import com.aiimagebox.generation.GenerationQueueItem
 import com.aiimagebox.generation.GenerationRequest
+import com.aiimagebox.generation.GenerationStatus as QueueGenerationStatus
 import com.aiimagebox.generation.GenerationTarget
 import com.aiimagebox.provider.ProviderRegistry
 import com.aiimagebox.ui.StudioForm
@@ -95,10 +97,10 @@ class MainActivity : AppCompatActivity() {
         binding.navRail.setOnItemSelectedListener(listener)
 
         binding.primaryAction.setOnClickListener {
-            if (currentTab == Tab.CHANNELS) {
-                showChannelDialog(null)
-            } else {
-                Toast.makeText(this, getString(R.string.toast_next_milestone), Toast.LENGTH_SHORT).show()
+            when (currentTab) {
+                Tab.CHANNELS -> showChannelDialog(null)
+                Tab.TASKS -> clearFinishedTasks()
+                else -> Toast.makeText(this, getString(R.string.toast_next_milestone), Toast.LENGTH_SHORT).show()
             }
         }
         binding.secondaryAction.setOnClickListener {
@@ -162,26 +164,30 @@ class MainActivity : AppCompatActivity() {
                 responseFormat = "b64_json",
             ),
         )
-        generationStore.createTask(
-            GenerationTask(
-                id = generationRequest.id,
-                mode = StoredGenerationMode.IMAGE,
-                status = StoredGenerationStatus.QUEUED,
-                prompt = request.prompt,
-                channelId = channel.id,
-                channelName = channel.name,
-                providerType = channel.providerType,
-                model = request.model.ifBlank { channel.defaultModel },
-                parametersJson = JSONObject()
-                    .put("aspect_ratio", request.aspectRatio)
-                    .put("resolution", imageSize(request.resolution, request.aspectRatio))
-                    .put("count", request.quantity)
-                    .toString(),
-            ),
-        )
+        createStoredTask(generationRequest)
         binding.studioForm.setSubmitting(true)
         binding.studioForm.setStatus(getString(R.string.studio_generate_enqueued, generationRequest.id.take(8)))
         generationManager.enqueue(generationRequest)
+    }
+
+    private fun createStoredTask(request: GenerationRequest): GenerationTask {
+        return generationStore.createTask(
+            GenerationTask(
+                id = request.id,
+                mode = StoredGenerationMode.IMAGE,
+                status = StoredGenerationStatus.QUEUED,
+                prompt = request.prompt,
+                channelId = request.target.channelId,
+                channelName = request.target.channelName,
+                providerType = request.target.providerType,
+                model = request.target.model,
+                parametersJson = JSONObject()
+                    .put("aspect_ratio", request.parameters.aspectRatio.ifBlank { "1:1" })
+                    .put("resolution", request.parameters.resolution ?: request.parameters.size ?: "1024x1024")
+                    .put("count", request.parameters.count)
+                    .toString(),
+            ),
+        )
     }
 
     private fun observeGenerationEvents() {
@@ -218,7 +224,7 @@ class MainActivity : AppCompatActivity() {
                 val savedSummary = savedPaths.toSavedSummary()
                 if (currentTab == Tab.TASKS) renderTaskPanel()
                 if (currentTab == Tab.HISTORY) renderHistoryPanel()
-                binding.studioForm.setSubmitting(false)
+                binding.studioForm.setSubmitting(!generationManager.snapshot().isIdle)
                 binding.studioForm.setResultPlaceholder(
                     getString(R.string.studio_generate_succeeded_multi, savedPaths.size, savedSummary),
                 )
@@ -238,7 +244,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 if (currentTab == Tab.TASKS) renderTaskPanel()
                 if (currentTab == Tab.HISTORY) renderHistoryPanel()
-                binding.studioForm.setSubmitting(false)
+                binding.studioForm.setSubmitting(!generationManager.snapshot().isIdle)
                 binding.studioForm.setStatus(
                     getString(R.string.studio_generate_failed, event.error.message ?: event.error::class.java.simpleName),
                 )
@@ -256,7 +262,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 if (currentTab == Tab.TASKS) renderTaskPanel()
                 if (currentTab == Tab.HISTORY) renderHistoryPanel()
-                binding.studioForm.setSubmitting(false)
+                binding.studioForm.setSubmitting(!generationManager.snapshot().isIdle)
                 binding.studioForm.setStatus(getString(R.string.studio_generate_cancelled, event.reason.orEmpty()))
             }
         }
@@ -389,19 +395,98 @@ class MainActivity : AppCompatActivity() {
         binding.taskEmpty.visibility = if (state.items.isEmpty()) View.VISIBLE else View.GONE
         binding.taskList.removeAllViews()
         state.items.asReversed().forEach { item ->
-            binding.taskList.addView(
-                simpleCard(
-                    title = item.request.prompt.take(80).ifBlank { item.request.id.take(8) },
-                    detail = getString(
-                        R.string.task_card_detail,
-                        item.request.target.channelName.ifBlank { item.request.target.channelId },
-                        item.request.target.model,
-                        item.status.name,
-                        item.resultByteCount?.let { "$it bytes" } ?: "-",
-                    ),
-                ),
-            )
+            binding.taskList.addView(taskCard(item))
         }
+    }
+
+    private fun taskCard(item: GenerationQueueItem): View {
+        val card = MaterialCardView(this).apply {
+            setCardBackgroundColor(color(R.color.aib_surface))
+            strokeColor = color(R.color.aib_line)
+            strokeWidth = dp(1)
+            radius = dp(8).toFloat()
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(10)
+            }
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+        }
+        content.addView(TextView(this).apply {
+            text = item.request.prompt.take(80).ifBlank { item.request.id.take(8) }
+            setTextColor(color(R.color.aib_text))
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        content.addView(TextView(this).apply {
+            text = getString(
+                R.string.task_card_detail,
+                item.request.target.channelName.ifBlank { item.request.target.channelId },
+                item.request.target.model,
+                item.status.displayName(),
+                item.resultByteCount?.let { "$it bytes" } ?: "-",
+                item.errorMessage.orEmpty().ifBlank { "-" },
+            )
+            setTextColor(color(R.color.aib_text_secondary))
+            textSize = 14f
+            setPadding(0, dp(7), 0, 0)
+        })
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(12), 0, 0)
+        }
+        when (item.status) {
+            QueueGenerationStatus.QUEUED,
+            QueueGenerationStatus.RUNNING
+            -> actions.addView(actionButton(R.string.action_cancel_task) { cancelTask(item) })
+            QueueGenerationStatus.FAILED,
+            QueueGenerationStatus.CANCELLED,
+            QueueGenerationStatus.SUCCEEDED
+            -> actions.addView(actionButton(R.string.action_retry_task) { retryTask(item) })
+        }
+        if (actions.childCount > 0) content.addView(actions)
+        card.addView(content)
+        return card
+    }
+
+    private fun QueueGenerationStatus.displayName(): String {
+        return when (this) {
+            QueueGenerationStatus.QUEUED -> getString(R.string.task_status_queued)
+            QueueGenerationStatus.RUNNING -> getString(R.string.task_status_running)
+            QueueGenerationStatus.SUCCEEDED -> getString(R.string.task_status_succeeded)
+            QueueGenerationStatus.FAILED -> getString(R.string.task_status_failed)
+            QueueGenerationStatus.CANCELLED -> getString(R.string.task_status_cancelled)
+        }
+    }
+
+    private fun cancelTask(item: GenerationQueueItem) {
+        val cancelled = generationManager.cancel(item.request.id, getString(R.string.task_cancelled_by_user))
+        if (cancelled) {
+            Toast.makeText(this, getString(R.string.task_cancel_sent, item.request.id.take(8)), Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, getString(R.string.task_cancel_unavailable), Toast.LENGTH_SHORT).show()
+        }
+        renderTaskPanel()
+    }
+
+    private fun retryTask(item: GenerationQueueItem) {
+        val retry = item.request.copy(id = java.util.UUID.randomUUID().toString(), createdAtMillis = System.currentTimeMillis())
+        createStoredTask(retry)
+        generationManager.enqueue(retry)
+        binding.studioForm.setSubmitting(true)
+        binding.studioForm.setStatus(getString(R.string.task_retry_enqueued, retry.id.take(8)))
+        Toast.makeText(this, getString(R.string.task_retry_enqueued, retry.id.take(8)), Toast.LENGTH_SHORT).show()
+        renderTaskPanel()
+    }
+
+    private fun clearFinishedTasks() {
+        val removed = generationManager.clearFinished()
+        Toast.makeText(this, getString(R.string.task_clear_finished_done, removed), Toast.LENGTH_SHORT).show()
+        renderTaskPanel()
     }
 
     private fun renderHistoryPanel() {
@@ -833,7 +918,7 @@ class MainActivity : AppCompatActivity() {
             R.string.tasks_headline,
             R.string.tasks_body,
             R.string.tasks_status,
-            R.string.action_view_queue,
+            R.string.action_clear_finished,
         ),
         HISTORY(
             R.id.nav_history,

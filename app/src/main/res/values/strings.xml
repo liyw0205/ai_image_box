@@ -31,6 +31,7 @@
     <string name="status_title">开发状态</string>
     <string name="action_start_draft">开始草稿</string>
     <string name="action_view_queue">查看队列</string>
+    <string name="action_clear_finished">清理已完成</string>
     <string name="action_open_history">打开历史</string>
     <string name="action_add_channel">添加渠道</string>
     <string name="action_test_channel">测试渠道</string>
@@ -74,6 +75,8 @@
     <string name="action_copy">复制</string>
     <string name="action_delete">删除</string>
     <string name="action_reuse_parameters">复用参数</string>
+    <string name="action_cancel_task">取消</string>
+    <string name="action_retry_task">重试</string>
 
     <string name="channel_test_no_adapter">当前 provider 类型暂不支持测试：%1$s</string>
     <string name="channel_test_running">正在测试“%1$s”的模型列表。</string>
@@ -92,7 +95,17 @@
 
     <string name="task_summary">队列：%1$d，运行：%2$d，成功：%3$d，失败：%4$d，取消：%5$d。</string>
     <string name="task_empty">当前没有队列任务。从创作页提交后会显示实时状态。</string>
-    <string name="task_card_detail">目标：%1$s / %2$s\n状态：%3$s\n结果大小：%4$s</string>
+    <string name="task_card_detail">目标：%1$s / %2$s\n状态：%3$s\n结果大小：%4$s\n错误：%5$s</string>
+    <string name="task_status_queued">排队中</string>
+    <string name="task_status_running">运行中</string>
+    <string name="task_status_succeeded">已成功</string>
+    <string name="task_status_failed">已失败</string>
+    <string name="task_status_cancelled">已取消</string>
+    <string name="task_cancelled_by_user">用户取消。</string>
+    <string name="task_cancel_sent">已请求取消任务：%1$s</string>
+    <string name="task_cancel_unavailable">当前任务无法取消。</string>
+    <string name="task_retry_enqueued">重试任务已加入队列：%1$s</string>
+    <string name="task_clear_finished_done">已清理 %1$d 个已完成任务。</string>
     <string name="history_summary">最近 %1$d 条生成记录。</string>
     <string name="history_empty">暂无生成历史。成功或失败的任务都会写入这里。</string>
     <string name="history_card_detail">目标：%1$s / %2$s\n状态：%3$s\n结果：%4$d 张\n文件：%5$s\n错误：%6$s</string>
