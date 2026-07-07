@@ -236,7 +236,7 @@ class StudioForm @JvmOverloads constructor(
 
         val modelLabel = target.model.ifBlank { TEXT_CHANNEL_MODEL_UNKNOWN }
         binding.studioChannelName.text = "${target.channelName} · $modelLabel"
-        binding.studioChannelMeta.text = "类型：${target.providerType}"
+        binding.studioChannelMeta.text = context.getString(R.string.studio_channel_mode, target.modeLabel())
         binding.studioChannelEndpoint.visibility = View.VISIBLE
         binding.studioChannelEndpoint.text = "接口：${target.baseUrl.ifBlank { "-" }}"
         binding.studioNextTargetButton.isEnabled = targetOptions.size > 1
@@ -359,6 +359,14 @@ class StudioForm @JvmOverloads constructor(
             if (key.isNotBlank() && value.isNotBlank()) values[key] = value
         }
         return values
+    }
+
+    private fun StudioChannelTarget.modeLabel(): String {
+        return if ("video" in providerType.lowercase()) {
+            context.getString(R.string.channel_mode_video)
+        } else {
+            context.getString(R.string.channel_mode_image)
+        }
     }
 
     data class StudioChannelTarget(

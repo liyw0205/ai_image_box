@@ -949,7 +949,7 @@ class MainActivity : AppCompatActivity() {
         content.addView(TextView(this).apply {
             text = getString(
                 R.string.channel_detail,
-                channel.providerType,
+                channelModeLabel(channel),
                 channel.baseUrl.ifBlank { getString(R.string.channel_no_base_url) },
                 channel.targetLabels(),
                 if (channel.apiKey != null) getString(R.string.channel_key_saved) else getString(R.string.channel_key_empty),
@@ -1134,19 +1134,22 @@ class MainActivity : AppCompatActivity() {
             }
             filtered.take(MAX_VISIBLE_MODELS).forEach { model ->
                 val modelType = modelInterfaceTypeFor(model, selectedTypes[model])
-                val row = LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    setPadding(0, dp(4), 0, dp(4))
+                val item = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(0, dp(8), 0, dp(8))
                 }
-                row.addView(CheckBox(this).apply {
-                    text = getString(R.string.channel_model_row, model, modelType.label)
+                item.addView(CheckBox(this).apply {
+                    text = model
                     setTextColor(color(R.color.aib_text))
                     textSize = 14f
-                    maxLines = 3
+                    maxLines = 6
                     isSingleLine = false
                     isChecked = model in selected
-                    setPadding(0, 0, dp(8), 0)
-                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    setPadding(0, 0, 0, 0)
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    )
                     setOnCheckedChangeListener { _, checked ->
                         if (checked) {
                             selected.add(model)
@@ -1161,22 +1164,33 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
                 })
-                row.addView(MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                    text = getString(R.string.action_change_model_type)
-                    setTextColor(color(R.color.aib_text))
-                    minHeight = dp(38)
-                    minimumHeight = dp(38)
-                    isAllCaps = false
-                    setSingleLine(false)
-                    maxLines = 2
-                    setOnClickListener {
-                        showModelTypeDialog(model, selectedTypes) {
-                            renderModels()
+                item.addView(LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(dp(40), 0, 0, 0)
+                    addView(TextView(this@MainActivity).apply {
+                        text = getString(R.string.channel_model_type_row, modelType.label)
+                        setTextColor(color(R.color.aib_text_secondary))
+                        textSize = 13f
+                        maxLines = 3
+                        layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                    })
+                    addView(MaterialButton(this@MainActivity, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                        text = getString(R.string.action_change_model_type)
+                        setTextColor(color(R.color.aib_text))
+                        minHeight = dp(38)
+                        minimumHeight = dp(38)
+                        isAllCaps = false
+                        setSingleLine(false)
+                        maxLines = 2
+                        setOnClickListener {
+                            showModelTypeDialog(model, selectedTypes) {
+                                renderModels()
+                            }
                         }
-                    }
-                    layoutParams = LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT)
+                        layoutParams = LinearLayout.LayoutParams(dp(96), ViewGroup.LayoutParams.WRAP_CONTENT)
+                    })
                 })
-                list.addView(row)
+                list.addView(item)
             }
             if (filtered.size > MAX_VISIBLE_MODELS) {
                 list.addView(TextView(this).apply {
@@ -1270,6 +1284,10 @@ class MainActivity : AppCompatActivity() {
     private fun inferModelInterfaceType(model: String): ModelInterfaceType {
         val normalized = model.lowercase()
         return when {
+            "seedance" in normalized ->
+                modelInterfaceTypeByKey("seedance_video")
+            listOf("grok", "grok-video").any { it in normalized } && "video" in normalized ->
+                modelInterfaceTypeByKey("grok_video")
             listOf("veo", "sora", "video", "wan", "kling", "hailuo", "runway").any { it in normalized } ->
                 modelInterfaceTypeByKey("openai_compatible_video")
             listOf("gemini", "imagen").any { it in normalized } ->
@@ -1303,6 +1321,8 @@ class MainActivity : AppCompatActivity() {
             ModelInterfaceType("agnes_image", getString(R.string.model_type_agnes_image)),
             ModelInterfaceType("grok_image", getString(R.string.model_type_grok_image)),
             ModelInterfaceType("openai_compatible_video", getString(R.string.model_type_openai_video)),
+            ModelInterfaceType("grok_video", getString(R.string.model_type_grok_video)),
+            ModelInterfaceType("seedance_video", getString(R.string.model_type_seedance_video)),
         )
     }
 
@@ -1359,6 +1379,33 @@ class MainActivity : AppCompatActivity() {
         return extra.toString()
     }
 
+    private fun channelModeLabel(channel: ProviderChannel): String {
+        val type = channel.providerType.lowercase()
+        if ("video" !in type) return getString(R.string.channel_mode_image)
+        return when (videoProviderKey(channel.extraJson)) {
+            VIDEO_PROVIDER_SEEDANCE -> getString(R.string.channel_mode_seedance_video)
+            VIDEO_PROVIDER_GROK -> getString(R.string.channel_mode_grok_video)
+            else -> getString(R.string.channel_mode_video)
+        }
+    }
+
+    private fun videoProviderKey(extraJson: String): String {
+        return runCatching {
+            JSONObject(extraJson.ifBlank { "{}" }).optString(KEY_VIDEO_PROVIDER, "").trim().lowercase()
+        }.getOrDefault("")
+    }
+
+    private fun setExtraJsonValue(extra: EditText, key: String, value: String?) {
+        val json = runCatching { JSONObject(extra.text?.toString().orEmpty().ifBlank { "{}" }) }
+            .getOrElse { JSONObject() }
+        if (value == null) {
+            json.remove(key)
+        } else {
+            json.put(key, value)
+        }
+        extra.setText(json.toString())
+    }
+
     private fun showChannelDialog(existing: ProviderChannel?) {
         val name = editText(R.string.field_channel_name, existing?.name.orEmpty())
         val providerType = editText(R.string.field_provider_type, existing?.providerType ?: "openai_compatible_image")
@@ -1373,34 +1420,30 @@ class MainActivity : AppCompatActivity() {
         val proxy = editText(R.string.field_proxy, existing?.proxy.orEmpty())
         val extra = editText(R.string.field_extra_json, existing?.extraJson ?: "{}")
         extra.minLines = 3
+        extra.visibility = View.GONE
         val enabled = SwitchMaterial(this).apply {
             text = getString(R.string.field_enabled)
             setTextColor(color(R.color.aib_text))
             isChecked = existing?.enabled ?: true
             setPadding(0, dp(8), 0, dp(8))
         }
-        val templates = channelTemplateRow(
-            name = name,
-            providerType = providerType,
-            baseUrl = baseUrl,
-            defaultModel = defaultModel,
-            enabledModels = enabledModels,
-        )
-        val providerTypes = providerTypePresetRow(providerType)
+        val channelMode = channelModeRow(providerType, extra)
+        val extraVisual = extraVisualPanel(providerType, extra)
+        val extraMode = extraModeRow(extraVisual, extra)
 
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(4), dp(2), dp(4), dp(2))
-            addView(templates)
-            addView(providerTypes)
+            addView(channelMode)
             addView(name)
-            addView(providerType)
             addView(baseUrl)
             addView(apiKey)
             addView(defaultModel)
             addView(enabledModels)
             addView(timeout)
             addView(proxy)
+            addView(extraMode)
+            addView(extraVisual)
             addView(extra)
             addView(enabled)
         }
@@ -1430,6 +1473,77 @@ class MainActivity : AppCompatActivity() {
             }
         }
         dialog.show()
+    }
+
+    private fun channelModeRow(providerType: EditText, extra: EditText): View {
+        return dialogButtonGrid(
+            listOf(
+                UiAction(R.string.channel_mode_image) {
+                    providerType.setText("openai_compatible_image")
+                    setExtraJsonValue(extra, KEY_VIDEO_PROVIDER, null)
+                },
+                UiAction(R.string.channel_mode_video) {
+                    providerType.setText("openai_compatible_video")
+                    if (videoProviderKey(extra.text.toString()).isBlank()) {
+                        setExtraJsonValue(extra, KEY_VIDEO_PROVIDER, VIDEO_PROVIDER_GROK)
+                    }
+                },
+            ),
+        )
+    }
+
+    private fun extraModeRow(visualPanel: View, jsonEditor: EditText): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(8), 0, 0)
+            addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.field_extra_visual)
+                setTextColor(color(R.color.aib_text))
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, 0, 0, dp(6))
+            })
+            addView(dialogButtonGrid(
+                listOf(
+                    UiAction(R.string.extra_mode_visual) {
+                        jsonEditor.visibility = View.GONE
+                        visualPanel.visibility = View.VISIBLE
+                    },
+                    UiAction(R.string.extra_mode_json) {
+                        visualPanel.visibility = View.GONE
+                        jsonEditor.visibility = View.VISIBLE
+                    },
+                ),
+            ))
+        }
+    }
+
+    private fun extraVisualPanel(providerType: EditText, extra: EditText): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.extra_visual_hint)
+                setTextColor(color(R.color.aib_text_secondary))
+                textSize = 13f
+                setPadding(0, 0, 0, dp(8))
+            })
+            addView(dialogButtonGrid(
+                listOf(
+                    UiAction(R.string.channel_mode_image) {
+                        providerType.setText("openai_compatible_image")
+                        setExtraJsonValue(extra, KEY_VIDEO_PROVIDER, null)
+                    },
+                    UiAction(R.string.channel_mode_grok_video) {
+                        providerType.setText("openai_compatible_video")
+                        setExtraJsonValue(extra, KEY_VIDEO_PROVIDER, VIDEO_PROVIDER_GROK)
+                    },
+                    UiAction(R.string.channel_mode_seedance_video) {
+                        providerType.setText("openai_compatible_video")
+                        setExtraJsonValue(extra, KEY_VIDEO_PROVIDER, VIDEO_PROVIDER_SEEDANCE)
+                    },
+                ),
+            ))
+        }
     }
 
     private fun channelTemplateRow(
@@ -1638,6 +1752,9 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val KEY_TAB = "current_tab"
         private const val MAX_VISIBLE_MODELS = 200
+        private const val KEY_VIDEO_PROVIDER = "video_provider"
+        private const val VIDEO_PROVIDER_GROK = "grok"
+        private const val VIDEO_PROVIDER_SEEDANCE = "seedance"
         private val CHANNEL_TEMPLATES = listOf(
             ChannelTemplate(
                 labelRes = R.string.channel_template_openai,
