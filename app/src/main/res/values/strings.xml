@@ -71,6 +71,11 @@
     <string name="channel_template_openai">OpenAI</string>
     <string name="channel_template_compatible">兼容接口</string>
     <string name="channel_template_local">本地接口</string>
+    <string name="channel_provider_openai_image">OpenAI 图</string>
+    <string name="channel_provider_gemini_image">Gemini 图</string>
+    <string name="channel_provider_agnes_image">Agnes 图</string>
+    <string name="channel_provider_grok_image">Grok 图</string>
+    <string name="channel_provider_video">视频</string>
 
     <string name="action_save">保存</string>
     <string name="action_edit">编辑</string>
@@ -82,6 +87,7 @@
     <string name="action_delete">删除</string>
     <string name="action_reuse_parameters">复用参数</string>
     <string name="action_view_detail">详情</string>
+    <string name="action_save_public">保存到公共目录</string>
     <string name="action_cancel_task">取消</string>
     <string name="action_retry_task">重试</string>
 
@@ -97,6 +103,12 @@
     <string name="channel_model_filter_count">匹配 %1$d / %2$d，已选 %3$d</string>
     <string name="channel_model_filter_empty">没有匹配的模型。</string>
     <string name="channel_model_filter_limited">仅显示前 %1$d 个匹配项，共 %2$d 个；继续输入关键字可缩小范围。</string>
+    <string name="channel_model_row">%1$s · %2$s</string>
+    <string name="model_type_openai_image">OpenAI 图像格式</string>
+    <string name="model_type_openai_video">OpenAI 视频格式</string>
+    <string name="model_type_gemini_image">Gemini 图像</string>
+    <string name="model_type_grok_image">Grok 图像</string>
+    <string name="model_type_agnes_image">Agnes 图像</string>
     <string name="action_select_visible">全选当前</string>
     <string name="action_clear_visible">清空当前</string>
     <string name="action_save_models">保存模型</string>
@@ -108,8 +120,14 @@
     <string name="studio_generate_started">正在调用 %1$s / %2$s。</string>
     <string name="studio_generate_succeeded">生成成功，已保存：%1$s</string>
     <string name="studio_generate_succeeded_multi">生成成功，共 %1$d 张：\n%2$s</string>
+    <string name="studio_generate_succeeded_preview">生成成功，共 %1$d 张。首张结果已显示，可在历史中查看详情或保存到公共目录。</string>
     <string name="studio_generate_failed">生成失败：%1$s</string>
     <string name="studio_generate_cancelled">任务已取消：%1$s</string>
+    <string name="studio_result_image">生成结果预览图</string>
+    <string name="export_no_files">没有可导出的结果文件。</string>
+    <string name="export_failed">保存到公共目录失败。</string>
+    <string name="export_succeeded">已保存 %1$d 个文件到公共目录：%2$s</string>
+    <string name="export_permission_denied">没有公共目录写入权限，无法保存。</string>
 
     <string name="task_summary">队列：%1$d，运行：%2$d，成功：%3$d，失败：%4$d，取消：%5$d。</string>
     <string name="task_empty">当前没有队列任务。从创作页提交后会显示实时状态。</string>
@@ -135,6 +153,11 @@
     <string name="history_thumbnail">历史结果缩略图</string>
     <string name="history_reuse_applied">已复用任务 %1$s 的提示词和参数。</string>
     <string name="history_detail_title">历史详情</string>
+    <string name="detail_section_request_info">请求信息</string>
+    <string name="detail_section_request_data">请求数据</string>
+    <string name="detail_section_response_info">响应信息</string>
+    <string name="detail_section_response_data">响应数据</string>
+    <string name="detail_section_response_result">响应结果</string>
     <string name="detail_line_prompt">提示词：%1$s</string>
     <string name="detail_line_target">目标：%1$s / %2$s</string>
     <string name="detail_line_status">状态：%1$s</string>

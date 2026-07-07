@@ -1,6 +1,7 @@
 package com.aiimagebox.ui
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
@@ -21,6 +22,7 @@ class StudioForm @JvmOverloads constructor(
     private var submitting = false
 
     var onSubmit: ((StudioSubmitRequest) -> Unit)? = null
+    var onSavePublic: (() -> Unit)? = null
 
     init {
         binding.studioAspectGroup.check(binding.studioAspectSquare.id)
@@ -30,6 +32,7 @@ class StudioForm @JvmOverloads constructor(
         binding.studioQuantityMinus.setOnClickListener { setQuantity(quantity - 1) }
         binding.studioQuantityPlus.setOnClickListener { setQuantity(quantity + 1) }
         binding.studioSubmitButton.setOnClickListener { submitCurrentForm() }
+        binding.studioSavePublicButton.setOnClickListener { onSavePublic?.invoke() }
 
         setQuantity(DEFAULT_QUANTITY)
         renderSelectedTarget()
@@ -52,6 +55,10 @@ class StudioForm @JvmOverloads constructor(
 
     fun setOnSubmitListener(listener: ((StudioSubmitRequest) -> Unit)?) {
         onSubmit = listener
+    }
+
+    fun setOnSavePublicListener(listener: (() -> Unit)?) {
+        onSavePublic = listener
     }
 
     fun setPrompt(prompt: CharSequence) {
@@ -90,7 +97,23 @@ class StudioForm @JvmOverloads constructor(
     }
 
     fun setResultPlaceholder(message: CharSequence) {
+        binding.studioResultImage.visibility = View.GONE
+        binding.studioResultImage.setImageDrawable(null)
         binding.studioResultPlaceholder.text = message
+        binding.studioSavePublicButton.visibility = View.GONE
+    }
+
+    fun setResultImage(filePath: String, message: CharSequence, canSavePublic: Boolean = true) {
+        val bitmap = decodePreview(filePath)
+        if (bitmap != null) {
+            binding.studioResultImage.setImageBitmap(bitmap)
+            binding.studioResultImage.visibility = View.VISIBLE
+        } else {
+            binding.studioResultImage.visibility = View.GONE
+            binding.studioResultImage.setImageDrawable(null)
+        }
+        binding.studioResultPlaceholder.text = message
+        binding.studioSavePublicButton.visibility = if (canSavePublic) View.VISIBLE else View.GONE
     }
 
     private fun submitCurrentForm() {
@@ -229,6 +252,20 @@ class StudioForm @JvmOverloads constructor(
             else -> binding.studioResolution1024.id
         }
         binding.studioResolutionGroup.check(buttonId)
+    }
+
+    private fun decodePreview(filePath: String): android.graphics.Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(filePath, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        val maxSide = (resources.displayMetrics.widthPixels * 1.5f).toInt().coerceAtLeast(640)
+        var sampleSize = 1
+        while (bounds.outWidth / sampleSize > maxSide || bounds.outHeight / sampleSize > maxSide) {
+            sampleSize *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize.coerceAtLeast(1) }
+        return BitmapFactory.decodeFile(filePath, options)
     }
 
     private fun ProviderChannel.toStudioTargets(): List<StudioChannelTarget> {

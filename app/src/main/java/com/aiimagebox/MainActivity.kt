@@ -1,8 +1,11 @@
 package com.aiimagebox
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
@@ -44,6 +47,7 @@ import com.aiimagebox.generation.GenerationTarget
 import com.aiimagebox.provider.ModelListResult
 import com.aiimagebox.provider.ProviderRegistry
 import com.aiimagebox.ui.StudioForm
+import com.aiimagebox.util.PublicMediaExporter
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -66,6 +70,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var generationManager: GenerationManager
     private var currentTab: Tab = Tab.STUDIO
     private var syncingNav = false
+    private var latestResultPaths: List<String> = emptyList()
+    private var pendingPublicExportPaths: List<String> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,6 +98,23 @@ class MainActivity : AppCompatActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putInt(KEY_TAB, currentTab.itemId)
         super.onSaveInstanceState(outState)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_WRITE_EXTERNAL_STORAGE) return
+
+        val pendingPaths = pendingPublicExportPaths
+        pendingPublicExportPaths = emptyList()
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            exportPathsToPublic(pendingPaths)
+        } else {
+            Toast.makeText(this, R.string.export_permission_denied, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun wireNavigation() {
@@ -147,6 +170,9 @@ class MainActivity : AppCompatActivity() {
     private fun wireStudioForm() {
         binding.studioForm.setOnSubmitListener { request ->
             submitStudioRequest(request)
+        }
+        binding.studioForm.setOnSavePublicListener {
+            exportPathsToPublic(latestResultPaths)
         }
     }
 
@@ -284,14 +310,13 @@ class MainActivity : AppCompatActivity() {
                 val savedPaths = withContext(Dispatchers.IO) {
                     saveGenerationSuccess(event)
                 }
-                val savedSummary = savedPaths.toSavedSummary()
+                latestResultPaths = savedPaths
                 if (currentTab == Tab.TASKS) renderTaskPanel()
                 if (currentTab == Tab.HISTORY) renderHistoryPanel()
                 binding.studioForm.setSubmitting(!generationManager.snapshot().isIdle)
-                binding.studioForm.setResultPlaceholder(
-                    getString(R.string.studio_generate_succeeded_multi, savedPaths.size, savedSummary),
-                )
-                binding.studioForm.setStatus(getString(R.string.studio_generate_succeeded_multi, savedPaths.size, savedSummary))
+                val successMessage = getString(R.string.studio_generate_succeeded_preview, savedPaths.size)
+                binding.studioForm.setResultImage(savedPaths.firstOrNull().orEmpty(), successMessage)
+                binding.studioForm.setStatus(successMessage)
             }
             is GenerationEvent.Failed -> {
                 withContext(Dispatchers.IO) {
@@ -385,6 +410,7 @@ class MainActivity : AppCompatActivity() {
         }
         val now = System.currentTimeMillis()
         val providerError = (event as? GenerationEvent.Failed)?.error as? GenerationProviderException
+        val successResult = (event as? GenerationEvent.Succeeded)?.result
         val requestJson = JSONObject()
             .put("prompt", item.request.prompt)
             .put("channel_id", item.request.target.channelId)
@@ -402,7 +428,18 @@ class MainActivity : AppCompatActivity() {
                 .put("raw_preview", result.rawPreview)
                 .put("error", result.error)
                 .toString()
+        } ?: successResult?.metadata?.let { metadata ->
+            JSONObject()
+                .put("provider_status", "SUCCEEDED")
+                .put("provider_request_id", metadata["provider_request_id"].orEmpty())
+                .put("http_status", metadata["http_status"]?.toIntOrNull() ?: JSONObject.NULL)
+                .put("elapsed_ms", metadata["elapsed_ms"]?.toLongOrNull() ?: JSONObject.NULL)
+                .put("raw_preview", metadata["raw_preview"].orEmpty())
+                .put("image_count", metadata["image_count"].orEmpty())
+                .toString()
         } ?: "{}"
+        val successHttpStatus = successResult?.metadata?.get("http_status")?.toIntOrNull()
+        val successDurationMs = successResult?.metadata?.get("elapsed_ms")?.toLongOrNull()
         return StoredAttemptRecord(
             taskId = item.request.id,
             attemptNumber = 1,
@@ -413,11 +450,11 @@ class MainActivity : AppCompatActivity() {
             model = item.request.target.model,
             requestJson = requestJson,
             responseJson = responseJson,
-            httpStatusCode = providerError?.providerResult?.httpStatus,
+            httpStatusCode = providerError?.providerResult?.httpStatus ?: successHttpStatus,
             errorMessage = error.ifBlank { providerError?.providerResult?.error.orEmpty() },
             startedAt = item.startedAtMillis ?: now,
             endedAt = now,
-            durationMs = providerError?.providerResult?.elapsedMillis ?: (item.startedAtMillis ?: now).let { now - it },
+            durationMs = providerError?.providerResult?.elapsedMillis ?: successDurationMs ?: (item.startedAtMillis ?: now).let { now - it },
         )
     }
 
@@ -466,6 +503,66 @@ class MainActivity : AppCompatActivity() {
         if (isEmpty()) return "-"
         val preview = take(3).joinToString("\n")
         return if (size > 3) "$preview\n..." else preview
+    }
+
+    private fun exportPathsToPublic(paths: List<String>) {
+        val files = paths
+            .map { File(it) }
+            .filter { it.isFile }
+        if (files.isEmpty()) {
+            Toast.makeText(this, R.string.export_no_files, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (requiresLegacyPublicWritePermission()) {
+            pendingPublicExportPaths = paths
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_WRITE_EXTERNAL_STORAGE)
+            return
+        }
+
+        lifecycleScope.launch {
+            val exported = withContext(Dispatchers.IO) {
+                files.mapNotNull { file ->
+                    runCatching {
+                        PublicMediaExporter.exportImage(
+                            context = this@MainActivity,
+                            source = file,
+                            displayName = file.name,
+                            mimeType = mimeTypeForFile(file),
+                        )
+                    }.getOrNull()
+                }
+            }
+            if (exported.isEmpty()) {
+                Toast.makeText(this@MainActivity, R.string.export_failed, Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.export_succeeded, exported.size, exported.first()),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+
+    private fun exportRecordAssets(record: GenerationRecord) {
+        exportPathsToPublic(record.assets.map { it.media.filePath })
+    }
+
+    private fun requiresLegacyPublicWritePermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            ) != PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun mimeTypeForFile(file: File): String {
+        return when (file.extension.lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "webp" -> "image/webp"
+            "gif" -> "image/gif"
+            else -> "image/png"
+        }
     }
 
     private fun renderTaskPanel() {
@@ -644,6 +741,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, dp(12), 0, 0)
         }
         actions.addView(actionButton(R.string.action_reuse_parameters) { reuseHistoryRecord(record) })
+        actions.addView(actionButton(R.string.action_save_public) { exportRecordAssets(record) })
         actions.addView(actionButton(R.string.action_view_detail) { showHistoryDetails(record) })
         content.addView(actions)
         card.addView(content)
@@ -689,44 +787,54 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun GenerationTask.detailText(): String {
-        val files = assets
-            .map { it.media.filePath }
-            .filter { it.isNotBlank() }
-            .take(5)
-            .joinToString("\n")
-            .ifBlank { "-" }
-        val attempt = attempts.lastOrNull()?.detailText() ?: getString(R.string.detail_attempt_empty)
+        val attempt = attempts.lastOrNull()
         return listOf(
+            getString(R.string.detail_section_request_info),
             getString(R.string.detail_line_prompt, prompt),
             getString(R.string.detail_line_target, channelName.ifBlank { channelId }, model),
             getString(R.string.detail_line_status, status.displayName()),
-            getString(R.string.detail_line_parameters, parametersJson),
-            getString(R.string.detail_line_assets, files),
+            getString(R.string.detail_section_request_data),
+            attempt?.requestJson?.ifBlank { parametersJson } ?: parametersJson,
+            getString(R.string.detail_section_response_info),
+            attempt?.responseInfoText().orEmpty().ifBlank { getString(R.string.detail_attempt_empty) },
+            getString(R.string.detail_section_response_data),
+            attempt?.responseJson?.ifBlank { "{}" } ?: "{}",
+            getString(R.string.detail_section_response_result),
+            filesSummary(assets),
             getString(R.string.detail_line_error, errorMessage.ifBlank { "-" }),
-            getString(R.string.detail_line_attempt, attempt),
         ).joinToString("\n\n")
     }
 
     private fun GenerationRecord.detailText(): String {
-        val files = assets
-            .map { it.media.filePath }
-            .filter { it.isNotBlank() }
-            .take(5)
-            .joinToString("\n")
-            .ifBlank { "-" }
-        val attempt = attempts.lastOrNull()?.detailText() ?: getString(R.string.detail_attempt_empty)
+        val attempt = attempts.lastOrNull()
         return listOf(
+            getString(R.string.detail_section_request_info),
             getString(R.string.detail_line_prompt, prompt),
             getString(R.string.detail_line_target, channelName.ifBlank { channelId }, model),
             getString(R.string.detail_line_status, status.displayName()),
-            getString(R.string.detail_line_parameters, parametersJson),
-            getString(R.string.detail_line_assets, files),
+            getString(R.string.detail_section_request_data),
+            attempt?.requestJson?.ifBlank { parametersJson } ?: parametersJson,
+            getString(R.string.detail_section_response_info),
+            attempt?.responseInfoText().orEmpty().ifBlank { getString(R.string.detail_attempt_empty) },
+            getString(R.string.detail_section_response_data),
+            attempt?.responseJson?.ifBlank { "{}" } ?: "{}",
+            getString(R.string.detail_section_response_result),
+            filesSummary(assets),
             getString(R.string.detail_line_error, errorMessage.ifBlank { "-" }),
-            getString(R.string.detail_line_attempt, attempt),
         ).joinToString("\n\n")
     }
 
     private fun StoredAttemptRecord.detailText(): String {
+        return listOf(
+            responseInfoText(),
+            getString(R.string.detail_section_request_data),
+            requestJson.ifBlank { "{}" },
+            getString(R.string.detail_section_response_data),
+            responseJson.ifBlank { "{}" },
+        ).joinToString("\n\n")
+    }
+
+    private fun StoredAttemptRecord.responseInfoText(): String {
         val response = runCatching { JSONObject(responseJson) }.getOrNull()
         val rawPreview = response?.optString("raw_preview", "").orEmpty()
             .ifBlank { response?.optString("_raw", "").orEmpty() }
@@ -741,6 +849,23 @@ class MainActivity : AppCompatActivity() {
             errorMessage.ifBlank { "-" },
             rawPreview,
         )
+    }
+
+    private fun filesSummary(assets: List<StoredGeneratedAsset>): String {
+        return assets
+            .map { asset ->
+                val media = asset.media
+                val size = media.sizeBytes?.let { "$it bytes" } ?: "-"
+                val dimensions = if (media.width != null && media.height != null) {
+                    "${media.width}x${media.height}"
+                } else {
+                    "-"
+                }
+                "${media.displayName.ifBlank { media.filePath }}\n${media.mimeType} · $dimensions · $size\n${media.filePath}"
+            }
+            .take(5)
+            .joinToString("\n\n")
+            .ifBlank { "-" }
     }
 
     private fun StoredGenerationStatus.displayName(): String {
@@ -985,8 +1110,9 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             filtered.take(MAX_VISIBLE_MODELS).forEach { model ->
+                val modelType = inferModelInterfaceType(model)
                 list.addView(CheckBox(this).apply {
-                    text = model
+                    text = getString(R.string.channel_model_row, model, modelType.label)
                     setTextColor(color(R.color.aib_text))
                     textSize = 14f
                     isChecked = model in selected
@@ -1064,6 +1190,7 @@ class MainActivity : AppCompatActivity() {
                     latest.copy(
                         defaultModel = defaultModel,
                         enabledModels = enabledModels,
+                        extraJson = withModelTypes(latest.extraJson, enabledModels),
                     ),
                 )
                 dialog.dismiss()
@@ -1087,6 +1214,33 @@ class MainActivity : AppCompatActivity() {
                 marginEnd = dp(8)
             }
         }
+    }
+
+    private fun inferModelInterfaceType(model: String): ModelInterfaceType {
+        val normalized = model.lowercase()
+        return when {
+            listOf("veo", "sora", "video", "wan", "kling", "hailuo", "runway").any { it in normalized } ->
+                ModelInterfaceType("openai_compatible_video", getString(R.string.model_type_openai_video))
+            listOf("gemini", "imagen").any { it in normalized } ->
+                ModelInterfaceType("gemini_image", getString(R.string.model_type_gemini_image))
+            "grok" in normalized ->
+                ModelInterfaceType("grok_image", getString(R.string.model_type_grok_image))
+            "agnes" in normalized ->
+                ModelInterfaceType("agnes_image", getString(R.string.model_type_agnes_image))
+            listOf("gpt-image", "dall", "image", "flux", "stable", "sdxl", "sd-", "midjourney").any { it in normalized } ->
+                ModelInterfaceType("openai_compatible_image", getString(R.string.model_type_openai_image))
+            else -> ModelInterfaceType("openai_compatible_image", getString(R.string.model_type_openai_image))
+        }
+    }
+
+    private fun withModelTypes(extraJson: String, models: List<String>): String {
+        val extra = runCatching { JSONObject(extraJson.ifBlank { "{}" }) }.getOrElse { JSONObject() }
+        val modelTypes = JSONObject()
+        models.forEach { model ->
+            modelTypes.put(model, inferModelInterfaceType(model).key)
+        }
+        extra.put("model_types", modelTypes)
+        return extra.toString()
     }
 
     private fun showChannelDialog(existing: ProviderChannel?) {
@@ -1116,11 +1270,13 @@ class MainActivity : AppCompatActivity() {
             defaultModel = defaultModel,
             enabledModels = enabledModels,
         )
+        val providerTypes = providerTypePresetRow(providerType)
 
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(4), dp(2), dp(4), dp(2))
             addView(templates)
+            addView(providerTypes)
             addView(name)
             addView(providerType)
             addView(baseUrl)
@@ -1184,6 +1340,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun providerTypePresetRow(providerType: EditText): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 0, 0, dp(8))
+            PROVIDER_TYPE_PRESETS.forEach { preset ->
+                addView(dialogButton(preset.labelRes) {
+                    providerType.setText(preset.providerType)
+                })
+            }
+        }
+    }
+
     private fun saveChannelFromDialog(
         dialog: AlertDialog,
         existing: ProviderChannel?,
@@ -1230,6 +1398,7 @@ class MainActivity : AppCompatActivity() {
             .split(',', '\n')
             .map { it.trim() }
             .filter { it.isNotBlank() }
+        val modelTypeSource = modelList.ifEmpty { listOf(defaultModel.trim()).filter { it.isNotBlank() } }
         val channel = ProviderChannel(
             id = existing?.id ?: java.util.UUID.randomUUID().toString(),
             name = cleanName,
@@ -1241,7 +1410,7 @@ class MainActivity : AppCompatActivity() {
             timeoutSeconds = timeout.toIntOrNull()?.coerceIn(10, 900) ?: 280,
             enabled = enabled,
             proxy = proxy.trim(),
-            extraJson = cleanExtra,
+            extraJson = withModelTypes(cleanExtra, modelTypeSource),
             createdAt = existing?.createdAt ?: System.currentTimeMillis(),
         )
         channelStore.upsert(channel)
@@ -1353,6 +1522,14 @@ class MainActivity : AppCompatActivity() {
                 defaultModel = "",
             ),
         )
+        private val PROVIDER_TYPE_PRESETS = listOf(
+            ProviderTypePreset(R.string.channel_provider_openai_image, "openai_compatible_image"),
+            ProviderTypePreset(R.string.channel_provider_gemini_image, "gemini_image"),
+            ProviderTypePreset(R.string.channel_provider_agnes_image, "agnes_image"),
+            ProviderTypePreset(R.string.channel_provider_grok_image, "grok_image"),
+            ProviderTypePreset(R.string.channel_provider_video, "openai_compatible_video"),
+        )
+        private const val REQUEST_WRITE_EXTERNAL_STORAGE = 2001
     }
 
     private data class ChannelTemplate(
@@ -1360,5 +1537,15 @@ class MainActivity : AppCompatActivity() {
         val providerType: String,
         val baseUrl: String,
         val defaultModel: String,
+    )
+
+    private data class ProviderTypePreset(
+        val labelRes: Int,
+        val providerType: String,
+    )
+
+    private data class ModelInterfaceType(
+        val key: String,
+        val label: String,
     )
 }

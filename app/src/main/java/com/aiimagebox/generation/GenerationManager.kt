@@ -121,6 +121,9 @@ class ProviderRegistryGenerationExecutor(
             put("request_id", request.id)
             requestId.takeIf { it.isNotBlank() }?.let { put("provider_request_id", it) }
             usedModel.takeIf { it.isNotBlank() }?.let { put("model", it) }
+            httpStatus?.let { put("http_status", it.toString()) }
+            put("elapsed_ms", elapsedMillis.toString())
+            rawPreview.takeIf { it.isNotBlank() }?.let { put("raw_preview", it) }
             put("image_count", images.size.toString())
         }
         val assets = images.mapIndexed { index, asset ->

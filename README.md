@@ -4,7 +4,7 @@ AI Image Box 是一个计划中的 Android 原生 APP，用于统一管理多接
 
 当前仓库远端只有最小 README。本地已补齐第一版开发文档，作为后续开工程骨架和实现功能的基线。
 
-当前开发基线：`0.3.4` Android 原生 OpenAI-compatible 文生图初版增强，包含四 Tab 主界面、创作表单、任务队列取消/重试/清理、重启恢复、常见 provider 错误中文化、失败响应预览详情、历史缩略图、参数复用、多图结果落盘、基础渠道管理、provider 模板、Base URL 基础校验、上游模型拉取/筛选/保存、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
+当前开发基线：`0.3.5` Android 原生 OpenAI-compatible 文生图初版增强，包含四 Tab 主界面、创作表单结果图片预览、公共目录导出、任务队列取消/重试/清理、重启恢复、请求/响应详情、常见 provider 错误中文化、历史缩略图、参数复用、多图结果落盘、基础渠道管理、provider 模板、Base URL 基础校验、上游模型拉取/筛选/保存和模型类型推断、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
 
 ## 文档入口
 
@@ -37,7 +37,7 @@ bash pack_ai_image_box.sh
 产物：
 
 ```text
-../AIImageBox_0.3.4_debug.apk
+../AIImageBox_0.3.5_debug.apk
 ```
 
 常规 Android 环境：
