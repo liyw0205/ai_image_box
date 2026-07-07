@@ -189,7 +189,8 @@ class MainActivity : AppCompatActivity() {
 
         val generationRequest = GenerationRequest(
             prompt = request.prompt,
-            target = GenerationTarget.fromChannel(channel, request.model),
+            target = GenerationTarget.fromChannel(channel, request.model)
+                .copy(providerType = request.providerType.ifBlank { channel.providerType }),
             parameters = GenerationParameters(
                 aspectRatio = request.aspectRatio,
                 resolution = imageSize(request.resolution, request.aspectRatio),
@@ -264,7 +265,8 @@ class MainActivity : AppCompatActivity() {
         return GenerationRequest(
             id = id,
             prompt = prompt,
-            target = GenerationTarget.fromChannel(channel, model.ifBlank { channel.defaultModel }),
+            target = GenerationTarget.fromChannel(channel, model.ifBlank { channel.defaultModel })
+                .copy(providerType = providerType.ifBlank { channel.providerType }),
             parameters = GenerationParameters(
                 aspectRatio = parameters.optString("aspect_ratio", "1:1"),
                 resolution = parameters.optString("resolution", "1024x1024"),
@@ -315,7 +317,7 @@ class MainActivity : AppCompatActivity() {
                 if (currentTab == Tab.HISTORY) renderHistoryPanel()
                 binding.studioForm.setSubmitting(!generationManager.snapshot().isIdle)
                 val successMessage = getString(R.string.studio_generate_succeeded_preview, savedPaths.size)
-                binding.studioForm.setResultImage(savedPaths.firstOrNull().orEmpty(), successMessage)
+                binding.studioForm.setResultImages(savedPaths, successMessage)
                 binding.studioForm.setStatus(successMessage)
             }
             is GenerationEvent.Failed -> {
@@ -618,21 +620,18 @@ class MainActivity : AppCompatActivity() {
             textSize = 14f
             setPadding(0, dp(7), 0, 0)
         })
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(12), 0, 0)
-        }
+        val actions = mutableListOf<UiAction>()
         when (item.status) {
             QueueGenerationStatus.QUEUED,
             QueueGenerationStatus.RUNNING
-            -> actions.addView(actionButton(R.string.action_cancel_task) { cancelTask(item) })
+            -> actions.add(UiAction(R.string.action_cancel_task) { cancelTask(item) })
             QueueGenerationStatus.FAILED,
             QueueGenerationStatus.CANCELLED,
             QueueGenerationStatus.SUCCEEDED
-            -> actions.addView(actionButton(R.string.action_retry_task) { retryTask(item) })
+            -> actions.add(UiAction(R.string.action_retry_task) { retryTask(item) })
         }
-        actions.addView(actionButton(R.string.action_view_detail) { showTaskDetails(item.request.id) })
-        if (actions.childCount > 0) content.addView(actions)
+        actions.add(UiAction(R.string.action_view_detail) { showTaskDetails(item.request.id) })
+        if (actions.isNotEmpty()) content.addView(actionGrid(actions))
         card.addView(content)
         return card
     }
@@ -736,14 +735,15 @@ class MainActivity : AppCompatActivity() {
             textSize = 14f
             setPadding(0, dp(7), 0, 0)
         })
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(12), 0, 0)
-        }
-        actions.addView(actionButton(R.string.action_reuse_parameters) { reuseHistoryRecord(record) })
-        actions.addView(actionButton(R.string.action_save_public) { exportRecordAssets(record) })
-        actions.addView(actionButton(R.string.action_view_detail) { showHistoryDetails(record) })
-        content.addView(actions)
+        content.addView(
+            actionGrid(
+                listOf(
+                    UiAction(R.string.action_reuse_parameters) { reuseHistoryRecord(record) },
+                    UiAction(R.string.action_save_public) { exportRecordAssets(record) },
+                    UiAction(R.string.action_view_detail) { showHistoryDetails(record) },
+                ),
+            ),
+        )
         card.addView(content)
         return card
     }
@@ -964,24 +964,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun channelActions(channel: ProviderChannel): View {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        return actionGrid(
+            listOf(
+                UiAction(R.string.action_edit) { showChannelDialog(channel) },
+                UiAction(R.string.action_fetch_models) { fetchChannelModels(channel) },
+                UiAction(if (channel.enabled) R.string.action_disable else R.string.action_enable) {
+                    channelStore.setEnabled(channel.id, !channel.enabled)
+                    renderChannelList()
+                    bindStudioChannels()
+                },
+                UiAction(R.string.action_copy) {
+                    channelStore.duplicate(channel.id)
+                    renderChannelList()
+                    bindStudioChannels()
+                },
+                UiAction(R.string.action_delete) { confirmDelete(channel) },
+            ),
+        )
+    }
+
+    private fun actionGrid(actions: List<UiAction>, columns: Int = 2): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setPadding(0, dp(12), 0, 0)
+            actions.chunked(columns).forEach { rowActions ->
+                addView(LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    rowActions.forEachIndexed { index, action ->
+                        addView(actionButton(action.textRes, action.onClick).apply {
+                            layoutParams = LinearLayout.LayoutParams(
+                                0,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                1f,
+                            ).apply {
+                                marginEnd = if (index < rowActions.lastIndex) dp(8) else 0
+                                bottomMargin = dp(8)
+                            }
+                        })
+                    }
+                })
+            }
         }
-        row.addView(actionButton(R.string.action_edit) { showChannelDialog(channel) })
-        row.addView(actionButton(R.string.action_fetch_models) { fetchChannelModels(channel) })
-        row.addView(actionButton(if (channel.enabled) R.string.action_disable else R.string.action_enable) {
-            channelStore.setEnabled(channel.id, !channel.enabled)
-            renderChannelList()
-            bindStudioChannels()
-        })
-        row.addView(actionButton(R.string.action_copy) {
-            channelStore.duplicate(channel.id)
-            renderChannelList()
-            bindStudioChannels()
-        })
-        row.addView(actionButton(R.string.action_delete) { confirmDelete(channel) })
-        return row
     }
 
     private fun actionButton(textRes: Int, onClick: () -> Unit): MaterialButton {
@@ -991,10 +1014,9 @@ class MainActivity : AppCompatActivity() {
             minHeight = dp(40)
             minimumHeight = dp(40)
             isAllCaps = false
+            setSingleLine(false)
+            maxLines = 2
             setOnClickListener { onClick() }
-            layoutParams = LinearLayout.LayoutParams(0, dp(42), 1f).apply {
-                marginEnd = dp(8)
-            }
         }
     }
 
@@ -1051,6 +1073,7 @@ class MainActivity : AppCompatActivity() {
             .filter { it.isNotBlank() }
             .filter { it in models }
             .toMutableSet()
+        val selectedTypes = modelTypeOverrides(channel.extraJson).toMutableMap()
 
         val status = TextView(this).apply {
             setTextColor(color(R.color.aib_text_secondary))
@@ -1110,13 +1133,20 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             filtered.take(MAX_VISIBLE_MODELS).forEach { model ->
-                val modelType = inferModelInterfaceType(model)
-                list.addView(CheckBox(this).apply {
+                val modelType = modelInterfaceTypeFor(model, selectedTypes[model])
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(0, dp(4), 0, dp(4))
+                }
+                row.addView(CheckBox(this).apply {
                     text = getString(R.string.channel_model_row, model, modelType.label)
                     setTextColor(color(R.color.aib_text))
                     textSize = 14f
+                    maxLines = 3
+                    isSingleLine = false
                     isChecked = model in selected
-                    setPadding(0, dp(4), 0, dp(4))
+                    setPadding(0, 0, dp(8), 0)
+                    layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                     setOnCheckedChangeListener { _, checked ->
                         if (checked) {
                             selected.add(model)
@@ -1131,6 +1161,22 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
                 })
+                row.addView(MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                    text = getString(R.string.action_change_model_type)
+                    setTextColor(color(R.color.aib_text))
+                    minHeight = dp(38)
+                    minimumHeight = dp(38)
+                    isAllCaps = false
+                    setSingleLine(false)
+                    maxLines = 2
+                    setOnClickListener {
+                        showModelTypeDialog(model, selectedTypes) {
+                            renderModels()
+                        }
+                    }
+                    layoutParams = LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT)
+                })
+                list.addView(row)
             }
             if (filtered.size > MAX_VISIBLE_MODELS) {
                 list.addView(TextView(this).apply {
@@ -1186,11 +1232,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 val latest = channelStore.load().firstOrNull { it.id == channel.id } ?: channel
                 val defaultModel = latest.defaultModel.takeIf { it in enabledModels } ?: enabledModels.first()
+                val enabledModelTypes = enabledModels.associateWith { model ->
+                    selectedTypes[model]?.takeIf { it.isNotBlank() } ?: inferModelInterfaceType(model).key
+                }
                 channelStore.upsert(
                     latest.copy(
                         defaultModel = defaultModel,
                         enabledModels = enabledModels,
-                        extraJson = withModelTypes(latest.extraJson, enabledModels),
+                        extraJson = withModelTypes(latest.extraJson, enabledModels, enabledModelTypes),
                     ),
                 )
                 dialog.dismiss()
@@ -1209,8 +1258,10 @@ class MainActivity : AppCompatActivity() {
             minHeight = dp(38)
             minimumHeight = dp(38)
             isAllCaps = false
+            setSingleLine(false)
+            maxLines = 2
             setOnClickListener { onClick() }
-            layoutParams = LinearLayout.LayoutParams(0, dp(40), 1f).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = dp(8)
             }
         }
@@ -1220,24 +1271,89 @@ class MainActivity : AppCompatActivity() {
         val normalized = model.lowercase()
         return when {
             listOf("veo", "sora", "video", "wan", "kling", "hailuo", "runway").any { it in normalized } ->
-                ModelInterfaceType("openai_compatible_video", getString(R.string.model_type_openai_video))
+                modelInterfaceTypeByKey("openai_compatible_video")
             listOf("gemini", "imagen").any { it in normalized } ->
-                ModelInterfaceType("gemini_image", getString(R.string.model_type_gemini_image))
+                modelInterfaceTypeByKey("gemini_image")
             "grok" in normalized ->
-                ModelInterfaceType("grok_image", getString(R.string.model_type_grok_image))
+                modelInterfaceTypeByKey("grok_image")
             "agnes" in normalized ->
-                ModelInterfaceType("agnes_image", getString(R.string.model_type_agnes_image))
+                modelInterfaceTypeByKey("agnes_image")
             listOf("gpt-image", "dall", "image", "flux", "stable", "sdxl", "sd-", "midjourney").any { it in normalized } ->
-                ModelInterfaceType("openai_compatible_image", getString(R.string.model_type_openai_image))
-            else -> ModelInterfaceType("openai_compatible_image", getString(R.string.model_type_openai_image))
-        }
+                modelInterfaceTypeByKey("openai_compatible_image")
+            else -> modelInterfaceTypeByKey("openai_compatible_image")
+        } ?: ModelInterfaceType("openai_compatible_image", getString(R.string.model_type_openai_image))
     }
 
-    private fun withModelTypes(extraJson: String, models: List<String>): String {
+    private fun modelInterfaceTypeFor(model: String, typeKey: String?): ModelInterfaceType {
+        val cleanKey = typeKey?.trim().orEmpty()
+        if (cleanKey.isNotBlank()) {
+            return modelInterfaceTypeByKey(cleanKey) ?: ModelInterfaceType(cleanKey, cleanKey)
+        }
+        return inferModelInterfaceType(model)
+    }
+
+    private fun modelInterfaceTypeByKey(typeKey: String): ModelInterfaceType? {
+        return modelInterfaceTypeOptions().firstOrNull { it.key == typeKey.trim() }
+    }
+
+    private fun modelInterfaceTypeOptions(): List<ModelInterfaceType> {
+        return listOf(
+            ModelInterfaceType("openai_compatible_image", getString(R.string.model_type_openai_image)),
+            ModelInterfaceType("gemini_image", getString(R.string.model_type_gemini_image)),
+            ModelInterfaceType("agnes_image", getString(R.string.model_type_agnes_image)),
+            ModelInterfaceType("grok_image", getString(R.string.model_type_grok_image)),
+            ModelInterfaceType("openai_compatible_video", getString(R.string.model_type_openai_video)),
+        )
+    }
+
+    private fun showModelTypeDialog(
+        model: String,
+        selectedTypes: MutableMap<String, String>,
+        onChanged: () -> Unit,
+    ) {
+        val types = modelInterfaceTypeOptions()
+        val labels = types.map { it.label }.toTypedArray()
+        val checked = types.indexOfFirst { it.key == modelInterfaceTypeFor(model, selectedTypes[model]).key }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.channel_model_type_title, model))
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                selectedTypes[model] = types[which].key
+                dialog.dismiss()
+                onChanged()
+            }
+            .setNeutralButton(R.string.action_use_inferred_type) { _, _ ->
+                selectedTypes.remove(model)
+                onChanged()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun modelTypeOverrides(extraJson: String): Map<String, String> {
+        val modelTypes = runCatching {
+            JSONObject(extraJson.ifBlank { "{}" }).optJSONObject("model_types")
+        }.getOrNull() ?: return emptyMap()
+
+        val values = mutableMapOf<String, String>()
+        val keys = modelTypes.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val value = modelTypes.optString(key, "").trim()
+            if (key.isNotBlank() && value.isNotBlank()) values[key] = value
+        }
+        return values
+    }
+
+    private fun withModelTypes(
+        extraJson: String,
+        models: List<String>,
+        typeOverrides: Map<String, String> = emptyMap(),
+    ): String {
         val extra = runCatching { JSONObject(extraJson.ifBlank { "{}" }) }.getOrElse { JSONObject() }
         val modelTypes = JSONObject()
         models.forEach { model ->
-            modelTypes.put(model, inferModelInterfaceType(model).key)
+            val typeKey = typeOverrides[model]?.takeIf { it.isNotBlank() } ?: inferModelInterfaceType(model).key
+            modelTypes.put(model, typeKey)
         }
         extra.put("model_types", modelTypes)
         return extra.toString()
@@ -1323,11 +1439,9 @@ class MainActivity : AppCompatActivity() {
         defaultModel: EditText,
         enabledModels: EditText,
     ): View {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 0, 0, dp(8))
-            CHANNEL_TEMPLATES.forEach { template ->
-                addView(dialogButton(template.labelRes) {
+        return dialogButtonGrid(
+            CHANNEL_TEMPLATES.map { template ->
+                UiAction(template.labelRes) {
                     if (name.text.isBlank()) name.setText(getString(template.labelRes))
                     providerType.setText(template.providerType)
                     baseUrl.setText(template.baseUrl)
@@ -1335,18 +1449,40 @@ class MainActivity : AppCompatActivity() {
                     if (enabledModels.text.isBlank() && template.defaultModel.isNotBlank()) {
                         enabledModels.setText(template.defaultModel)
                     }
-                })
-            }
-        }
+                }
+            },
+        )
     }
 
     private fun providerTypePresetRow(providerType: EditText): View {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, 0, 0, dp(8))
-            PROVIDER_TYPE_PRESETS.forEach { preset ->
-                addView(dialogButton(preset.labelRes) {
+        return dialogButtonGrid(
+            PROVIDER_TYPE_PRESETS.map { preset ->
+                UiAction(preset.labelRes) {
                     providerType.setText(preset.providerType)
+                }
+            },
+        )
+    }
+
+    private fun dialogButtonGrid(actions: List<UiAction>, columns: Int = 2): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, dp(8))
+            actions.chunked(columns).forEach { rowActions ->
+                addView(LinearLayout(this@MainActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    rowActions.forEachIndexed { index, action ->
+                        addView(dialogButton(action.textRes, action.onClick).apply {
+                            layoutParams = LinearLayout.LayoutParams(
+                                0,
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                1f,
+                            ).apply {
+                                marginEnd = if (index < rowActions.lastIndex) dp(8) else 0
+                                bottomMargin = dp(8)
+                            }
+                        })
+                    }
                 })
             }
         }
@@ -1547,5 +1683,10 @@ class MainActivity : AppCompatActivity() {
     private data class ModelInterfaceType(
         val key: String,
         val label: String,
+    )
+
+    private data class UiAction(
+        val textRes: Int,
+        val onClick: () -> Unit,
     )
 }

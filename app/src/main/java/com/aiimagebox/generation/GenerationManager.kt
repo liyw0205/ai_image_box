@@ -46,7 +46,7 @@ class ProviderRegistryGenerationExecutor(
                 "ProviderRegistryGenerationExecutor requires GenerationTarget.channel. " +
                     "Use GenerationTarget.fromChannel(...) or pass a custom GenerationExecutor.",
             )
-        val adapter = registry.require(channel.providerType.ifBlank { request.target.providerType })
+        val adapter = registry.require(request.target.providerType.ifBlank { channel.providerType })
         val providerRequest = request.toProviderRequest()
         val providerTarget = request.target.toModelTarget(channel)
         val providerResult = adapter.generate(channel, providerRequest, providerTarget)

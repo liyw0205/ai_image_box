@@ -6,9 +6,14 @@ import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
 import androidx.core.widget.doAfterTextChanged
+import com.aiimagebox.R
 import com.aiimagebox.data.ProviderChannel
 import com.aiimagebox.databinding.ViewStudioFormBinding
+import org.json.JSONObject
+import kotlin.math.roundToInt
 
 class StudioForm @JvmOverloads constructor(
     context: Context,
@@ -99,21 +104,65 @@ class StudioForm @JvmOverloads constructor(
     fun setResultPlaceholder(message: CharSequence) {
         binding.studioResultImage.visibility = View.GONE
         binding.studioResultImage.setImageDrawable(null)
+        binding.studioResultGallery.removeAllViews()
+        binding.studioResultGalleryScroll.visibility = View.GONE
         binding.studioResultPlaceholder.text = message
         binding.studioSavePublicButton.visibility = View.GONE
     }
 
     fun setResultImage(filePath: String, message: CharSequence, canSavePublic: Boolean = true) {
-        val bitmap = decodePreview(filePath)
-        if (bitmap != null) {
-            binding.studioResultImage.setImageBitmap(bitmap)
-            binding.studioResultImage.visibility = View.VISIBLE
-        } else {
+        setResultImages(listOf(filePath), message, canSavePublic)
+    }
+
+    fun setResultImages(filePaths: List<String>, message: CharSequence, canSavePublic: Boolean = true) {
+        val paths = filePaths.map { it.trim() }.filter { it.isNotBlank() }
+        val hasMainPreview = showMainPreview(paths.firstOrNull().orEmpty())
+        renderResultGallery(paths)
+        if (!hasMainPreview) {
             binding.studioResultImage.visibility = View.GONE
             binding.studioResultImage.setImageDrawable(null)
         }
         binding.studioResultPlaceholder.text = message
-        binding.studioSavePublicButton.visibility = if (canSavePublic) View.VISIBLE else View.GONE
+        binding.studioSavePublicButton.visibility = if (canSavePublic && paths.isNotEmpty()) View.VISIBLE else View.GONE
+    }
+
+    private fun showMainPreview(filePath: String): Boolean {
+        val bitmap = decodePreview(filePath, mainPreviewMaxSide())
+        if (bitmap != null) {
+            binding.studioResultImage.setImageBitmap(bitmap)
+            binding.studioResultImage.visibility = View.VISIBLE
+            return true
+        } else {
+            binding.studioResultImage.visibility = View.GONE
+            binding.studioResultImage.setImageDrawable(null)
+            return false
+        }
+    }
+
+    private fun renderResultGallery(filePaths: List<String>) {
+        binding.studioResultGallery.removeAllViews()
+        if (filePaths.size <= 1) {
+            binding.studioResultGalleryScroll.visibility = View.GONE
+            return
+        }
+
+        filePaths.take(MAX_GALLERY_ITEMS).forEach { path ->
+            val bitmap = decodePreview(path, dp(112))
+            val item = ImageView(context).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(92), dp(92)).apply {
+                    marginEnd = dp(8)
+                }
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setBackgroundColor(context.getColor(R.color.aib_surface2))
+                contentDescription = context.getString(R.string.studio_result_image)
+                setOnClickListener { showMainPreview(path) }
+                if (bitmap != null) {
+                    setImageBitmap(bitmap)
+                }
+            }
+            binding.studioResultGallery.addView(item)
+        }
+        binding.studioResultGalleryScroll.visibility = View.VISIBLE
     }
 
     private fun submitCurrentForm() {
@@ -254,22 +303,30 @@ class StudioForm @JvmOverloads constructor(
         binding.studioResolutionGroup.check(buttonId)
     }
 
-    private fun decodePreview(filePath: String): android.graphics.Bitmap? {
+    private fun decodePreview(filePath: String, maxSidePx: Int): android.graphics.Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(filePath, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
-        val maxSide = (resources.displayMetrics.widthPixels * 1.5f).toInt().coerceAtLeast(640)
         var sampleSize = 1
-        while (bounds.outWidth / sampleSize > maxSide || bounds.outHeight / sampleSize > maxSide) {
+        while (bounds.outWidth / sampleSize > maxSidePx || bounds.outHeight / sampleSize > maxSidePx) {
             sampleSize *= 2
         }
         val options = BitmapFactory.Options().apply { inSampleSize = sampleSize.coerceAtLeast(1) }
         return BitmapFactory.decodeFile(filePath, options)
     }
 
+    private fun mainPreviewMaxSide(): Int {
+        return (resources.displayMetrics.widthPixels * 1.5f).toInt().coerceAtLeast(640)
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).roundToInt()
+    }
+
     private fun ProviderChannel.toStudioTargets(): List<StudioChannelTarget> {
         if (!enabled) return emptyList()
+        val modelTypes = modelTypeOverrides(extraJson)
         val models = enabledModels
             .ifEmpty { listOf(defaultModel) }
             .map { it.trim() }
@@ -280,13 +337,28 @@ class StudioForm @JvmOverloads constructor(
             StudioChannelTarget(
                 channelId = id,
                 channelName = name,
-                providerType = providerType,
+                providerType = modelTypes[model]?.takeIf { it.isNotBlank() } ?: providerType,
                 baseUrl = baseUrl,
                 model = model,
                 timeoutSeconds = timeoutSeconds,
                 proxy = proxy,
             )
         }
+    }
+
+    private fun modelTypeOverrides(extraJson: String): Map<String, String> {
+        val modelTypes = runCatching {
+            JSONObject(extraJson.ifBlank { "{}" }).optJSONObject("model_types")
+        }.getOrNull() ?: return emptyMap()
+
+        val values = mutableMapOf<String, String>()
+        val keys = modelTypes.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val value = modelTypes.optString(key, "").trim()
+            if (key.isNotBlank() && value.isNotBlank()) values[key] = value
+        }
+        return values
     }
 
     data class StudioChannelTarget(
@@ -316,6 +388,7 @@ class StudioForm @JvmOverloads constructor(
     companion object {
         private const val MIN_QUANTITY = 1
         private const val MAX_QUANTITY = 4
+        private const val MAX_GALLERY_ITEMS = 12
         private const val DEFAULT_QUANTITY = 1
         private const val TEXT_SUBMIT = "开始生成"
         private const val TEXT_SUBMIT_RUNNING = "提交中"

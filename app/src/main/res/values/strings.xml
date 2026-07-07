@@ -112,6 +112,9 @@
     <string name="action_select_visible">全选当前</string>
     <string name="action_clear_visible">清空当前</string>
     <string name="action_save_models">保存模型</string>
+    <string name="action_change_model_type">改类型</string>
+    <string name="action_use_inferred_type">使用推断</string>
+    <string name="channel_model_type_title">设置模型类型：%1$s</string>
     <string name="channel_models_saved">已保存 %1$d 个启用模型。</string>
     <string name="channel_models_select_required">请至少选择一个模型。</string>
 
