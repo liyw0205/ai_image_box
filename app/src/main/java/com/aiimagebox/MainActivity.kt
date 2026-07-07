@@ -1,11 +1,14 @@
 package com.aiimagebox
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -20,6 +23,7 @@ import com.aiimagebox.data.ChannelStore
 import com.aiimagebox.data.AttemptRecord as StoredAttemptRecord
 import com.aiimagebox.data.GeneratedAsset as StoredGeneratedAsset
 import com.aiimagebox.data.GenerationMode as StoredGenerationMode
+import com.aiimagebox.data.GenerationRecord
 import com.aiimagebox.data.GenerationStatus as StoredGenerationStatus
 import com.aiimagebox.data.GenerationStore
 import com.aiimagebox.data.GenerationTask
@@ -197,7 +201,7 @@ class MainActivity : AppCompatActivity() {
                         it.copy(status = StoredGenerationStatus.RUNNING, startedAt = System.currentTimeMillis())
                     }
                 }
-                renderTaskPanel()
+                if (currentTab == Tab.TASKS) renderTaskPanel()
                 binding.studioForm.setSubmitting(true)
                 binding.studioForm.setStatus(
                     getString(
@@ -208,14 +212,17 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             is GenerationEvent.Succeeded -> {
-                val savedPath = withContext(Dispatchers.IO) {
+                val savedPaths = withContext(Dispatchers.IO) {
                     saveGenerationSuccess(event)
                 }
-                renderTaskPanel()
-                renderHistoryPanel()
+                val savedSummary = savedPaths.toSavedSummary()
+                if (currentTab == Tab.TASKS) renderTaskPanel()
+                if (currentTab == Tab.HISTORY) renderHistoryPanel()
                 binding.studioForm.setSubmitting(false)
-                binding.studioForm.setResultPlaceholder(getString(R.string.studio_generate_succeeded, savedPath))
-                binding.studioForm.setStatus(getString(R.string.studio_generate_succeeded, savedPath))
+                binding.studioForm.setResultPlaceholder(
+                    getString(R.string.studio_generate_succeeded_multi, savedPaths.size, savedSummary),
+                )
+                binding.studioForm.setStatus(getString(R.string.studio_generate_succeeded_multi, savedPaths.size, savedSummary))
             }
             is GenerationEvent.Failed -> {
                 withContext(Dispatchers.IO) {
@@ -229,8 +236,8 @@ class MainActivity : AppCompatActivity() {
                     }
                     if (updated != null) generationStore.appendRecord(updated)
                 }
-                renderTaskPanel()
-                renderHistoryPanel()
+                if (currentTab == Tab.TASKS) renderTaskPanel()
+                if (currentTab == Tab.HISTORY) renderHistoryPanel()
                 binding.studioForm.setSubmitting(false)
                 binding.studioForm.setStatus(
                     getString(R.string.studio_generate_failed, event.error.message ?: event.error::class.java.simpleName),
@@ -247,44 +254,51 @@ class MainActivity : AppCompatActivity() {
                     }
                     if (updated != null) generationStore.appendRecord(updated)
                 }
-                renderTaskPanel()
-                renderHistoryPanel()
+                if (currentTab == Tab.TASKS) renderTaskPanel()
+                if (currentTab == Tab.HISTORY) renderHistoryPanel()
                 binding.studioForm.setSubmitting(false)
                 binding.studioForm.setStatus(getString(R.string.studio_generate_cancelled, event.reason.orEmpty()))
             }
         }
     }
 
-    private fun saveGenerationSuccess(event: GenerationEvent.Succeeded): String {
+    private fun saveGenerationSuccess(event: GenerationEvent.Succeeded): List<String> {
         val request = event.item.request
         val result = event.result
-        val ext = extensionForMime(result.mimeType)
-        val file = File(appDirectories.generatedImages, "image_${System.currentTimeMillis()}_${request.id.take(8)}.$ext")
-        file.writeBytes(result.bytes)
-        val asset = StoredGeneratedAsset(
-            mode = StoredGenerationMode.IMAGE,
-            media = StoredMediaReference(
-                filePath = file.absolutePath,
-                mimeType = result.mimeType,
-                displayName = file.name,
-                sizeBytes = result.bytes.size.toLong(),
-            ),
-            channelId = request.target.channelId,
-            channelName = request.target.channelName,
-            providerType = request.target.providerType,
-            model = request.target.model,
-            metadataJson = JSONObject(result.metadata).toString(),
-        )
+        val savedAt = System.currentTimeMillis()
+        val assets = result.assets.mapIndexed { index, generatedAsset ->
+            val ext = extensionForMime(generatedAsset.mimeType)
+            val suffix = if (result.assets.size > 1) "_${index + 1}" else ""
+            val file = File(appDirectories.generatedImages, "image_${savedAt}_${request.id.take(8)}$suffix.$ext")
+            file.writeBytes(generatedAsset.bytes)
+            val dimensions = imageDimensions(file)
+            StoredGeneratedAsset(
+                mode = StoredGenerationMode.IMAGE,
+                media = StoredMediaReference(
+                    filePath = file.absolutePath,
+                    mimeType = generatedAsset.mimeType,
+                    displayName = file.name,
+                    sizeBytes = generatedAsset.bytes.size.toLong(),
+                    width = dimensions.first,
+                    height = dimensions.second,
+                ),
+                channelId = request.target.channelId,
+                channelName = request.target.channelName,
+                providerType = request.target.providerType,
+                model = request.target.model,
+                metadataJson = JSONObject(generatedAsset.metadata.ifEmpty { result.metadata }).toString(),
+            )
+        }
         val updated = generationStore.updateTask(request.id) {
             it.copy(
                 status = StoredGenerationStatus.SUCCEEDED,
-                assets = it.assets + asset,
+                assets = it.assets + assets,
                 attempts = it.attempts + storedAttempt(event, StoredGenerationStatus.SUCCEEDED, ""),
                 completedAt = System.currentTimeMillis(),
             )
         }
         if (updated != null) generationStore.appendRecord(updated)
-        return file.absolutePath
+        return assets.map { it.media.filePath }
     }
 
     private fun storedAttempt(
@@ -335,6 +349,33 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun imageDimensions(file: File): Pair<Int?, Int?> {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, options)
+        val width = options.outWidth.takeIf { it > 0 }
+        val height = options.outHeight.takeIf { it > 0 }
+        return width to height
+    }
+
+    private fun decodeThumbnail(filePath: String, maxSidePx: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(filePath, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var sampleSize = 1
+        while (bounds.outWidth / sampleSize > maxSidePx || bounds.outHeight / sampleSize > maxSidePx) {
+            sampleSize *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize.coerceAtLeast(1) }
+        return BitmapFactory.decodeFile(filePath, options)
+    }
+
+    private fun List<String>.toSavedSummary(): String {
+        if (isEmpty()) return "-"
+        val preview = take(3).joinToString("\n")
+        return if (size > 3) "$preview\n..." else preview
+    }
+
     private fun renderTaskPanel() {
         val state = generationManager.snapshot()
         binding.taskSummary.text = getString(
@@ -369,21 +410,88 @@ class MainActivity : AppCompatActivity() {
         binding.historyEmpty.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
         binding.historyList.removeAllViews()
         records.forEach { record ->
-            val filePath = record.assets.firstOrNull()?.media?.filePath.orEmpty().ifBlank { "-" }
-            binding.historyList.addView(
-                simpleCard(
-                    title = record.prompt.take(80).ifBlank { record.taskId.take(8) },
-                    detail = getString(
-                        R.string.history_card_detail,
-                        record.channelName.ifBlank { record.channelId },
-                        record.model,
-                        record.status.wireName,
-                        filePath,
-                        record.errorMessage.ifBlank { "-" },
-                    ),
-                ),
+            binding.historyList.addView(historyCard(record))
+        }
+    }
+
+    private fun historyCard(record: GenerationRecord): View {
+        val card = MaterialCardView(this).apply {
+            setCardBackgroundColor(color(R.color.aib_surface))
+            strokeColor = color(R.color.aib_line)
+            strokeWidth = dp(1)
+            radius = dp(8).toFloat()
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(10)
+            }
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+        }
+        thumbnailView(record.assets.firstOrNull()?.media?.filePath.orEmpty())?.let { content.addView(it) }
+        content.addView(TextView(this).apply {
+            text = record.prompt.take(80).ifBlank { record.taskId.take(8) }
+            setTextColor(color(R.color.aib_text))
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(8), 0, 0)
+        })
+        val filePath = record.assets.firstOrNull()?.media?.filePath.orEmpty().ifBlank { "-" }
+        content.addView(TextView(this).apply {
+            text = getString(
+                R.string.history_card_detail,
+                record.channelName.ifBlank { record.channelId },
+                record.model,
+                record.status.wireName,
+                record.assets.size,
+                filePath,
+                record.errorMessage.ifBlank { "-" },
+            )
+            setTextColor(color(R.color.aib_text_secondary))
+            textSize = 14f
+            setPadding(0, dp(7), 0, 0)
+        })
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(12), 0, 0)
+        }
+        actions.addView(actionButton(R.string.action_reuse_parameters) { reuseHistoryRecord(record) })
+        content.addView(actions)
+        card.addView(content)
+        return card
+    }
+
+    private fun thumbnailView(filePath: String): ImageView? {
+        val file = File(filePath)
+        if (!file.isFile) return null
+        val bitmap = decodeThumbnail(file.absolutePath, dp(420)) ?: return null
+        return ImageView(this).apply {
+            setImageBitmap(bitmap)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            adjustViewBounds = false
+            contentDescription = getString(R.string.history_thumbnail)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(180),
             )
         }
+    }
+
+    private fun reuseHistoryRecord(record: GenerationRecord) {
+        val parameters = runCatching { JSONObject(record.parametersJson) }.getOrDefault(JSONObject())
+        render(Tab.STUDIO)
+        binding.studioForm.applyDraft(
+            prompt = record.prompt,
+            channelId = record.channelId,
+            model = record.model,
+            aspectRatio = parameters.optString("aspect_ratio", "1:1"),
+            resolution = parameters.optString("resolution", "1024"),
+            quantity = parameters.optInt("count", 1).coerceIn(1, 4),
+        )
+        binding.studioForm.setStatus(getString(R.string.history_reuse_applied, record.taskId.take(8)))
     }
 
     private fun simpleCard(title: String, detail: String): View {

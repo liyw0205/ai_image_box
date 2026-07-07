@@ -108,19 +108,32 @@ class ProviderRegistryGenerationExecutor(
         if (status != ProviderGenerationStatus.SUCCEEDED) {
             throw IllegalStateException(error.ifBlank { "Provider generation failed: $status" })
         }
+        if (images.isEmpty()) {
+            throw IllegalStateException("Provider result did not include image assets.")
+        }
 
-        val asset = images.firstOrNull()
-            ?: throw IllegalStateException("Provider result did not include an image asset.")
-        val mimeType = asset.mimeType.ifBlank { "image/png" }
         val metadata = buildMap {
             put("request_id", request.id)
             requestId.takeIf { it.isNotBlank() }?.let { put("provider_request_id", it) }
             usedModel.takeIf { it.isNotBlank() }?.let { put("model", it) }
             put("image_count", images.size.toString())
         }
+        val assets = images.mapIndexed { index, asset ->
+            GenerationAsset(
+                bytes = asset.bytes,
+                mimeType = asset.mimeType.ifBlank { "image/png" },
+                fileNameHint = "image_${index + 1}",
+                metadata = buildMap {
+                    putAll(metadata)
+                    put("image_index", (index + 1).toString())
+                    put("source", asset.source.name.lowercase())
+                    asset.remoteUrl.takeIf { it.isNotBlank() }?.let { put("remote_url", it) }
+                    asset.revisedPrompt.takeIf { it.isNotBlank() }?.let { put("revised_prompt", it) }
+                },
+            )
+        }
         return GenerationResult(
-            bytes = asset.bytes,
-            mimeType = mimeType,
+            assets = assets,
             metadata = metadata,
         )
     }

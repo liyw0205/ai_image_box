@@ -59,6 +59,22 @@ class StudioForm @JvmOverloads constructor(
         binding.studioPromptInput.setSelection(binding.studioPromptInput.text?.length ?: 0)
     }
 
+    fun applyDraft(
+        prompt: CharSequence,
+        channelId: String,
+        model: String,
+        aspectRatio: String,
+        resolution: String,
+        quantity: Int,
+    ) {
+        setPrompt(prompt)
+        selectTarget(channelId, model)
+        selectAspectRatio(aspectRatio)
+        selectResolution(resolution)
+        setQuantity(quantity)
+        updateSubmitState()
+    }
+
     fun setSubmitting(isSubmitting: Boolean) {
         submitting = isSubmitting
         binding.studioStatusProgress.visibility = if (isSubmitting) View.VISIBLE else View.GONE
@@ -126,6 +142,16 @@ class StudioForm @JvmOverloads constructor(
         renderSelectedTarget()
     }
 
+    private fun selectTarget(channelId: String, model: String) {
+        val index = targetOptions.indexOfFirst {
+            it.channelId == channelId && (model.isBlank() || it.model == model)
+        }.takeIf { it >= 0 } ?: targetOptions.indexOfFirst { it.channelId == channelId }
+        if (index >= 0) {
+            selectedTargetIndex = index
+            renderSelectedTarget()
+        }
+    }
+
     private fun renderSelectedTarget() {
         val target = selectedTarget()
         if (target == null) {
@@ -169,12 +195,40 @@ class StudioForm @JvmOverloads constructor(
         }
     }
 
+    private fun selectAspectRatio(aspectRatio: String) {
+        val buttonId = when (aspectRatio.trim()) {
+            "3:4", "portrait" -> binding.studioAspectPortrait.id
+            "4:3", "landscape" -> binding.studioAspectLandscape.id
+            "16:9", "wide" -> binding.studioAspectWide.id
+            else -> binding.studioAspectSquare.id
+        }
+        binding.studioAspectGroup.check(buttonId)
+    }
+
     private fun selectedResolution(): String {
         return when (binding.studioResolutionGroup.checkedButtonId) {
             binding.studioResolution1536.id -> "1536"
             binding.studioResolution2048.id -> "2048"
             else -> "1024"
         }
+    }
+
+    private fun selectResolution(resolution: String) {
+        val normalized = resolution.trim().lowercase()
+        val longSide = if ("x" in normalized) {
+            normalized.split('x')
+                .mapNotNull { it.toIntOrNull() }
+                .maxOrNull()
+                ?.toString()
+        } else {
+            normalized.filter { it.isDigit() }
+        }.orEmpty()
+        val buttonId = when (longSide) {
+            "1536" -> binding.studioResolution1536.id
+            "2048" -> binding.studioResolution2048.id
+            else -> binding.studioResolution1024.id
+        }
+        binding.studioResolutionGroup.check(buttonId)
     }
 
     private fun ProviderChannel.toStudioTargets(): List<StudioChannelTarget> {

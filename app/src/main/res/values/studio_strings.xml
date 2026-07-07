@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="studio_form_title">创作</string>
-    <string name="studio_form_subtitle">填写提示词并确认生成参数，后续由主线程接入真实提交流程。</string>
+    <string name="studio_form_subtitle">填写提示词并确认生成参数，提交后会进入队列并调用当前渠道。</string>
     <string name="studio_prompt_title">提示词</string>
     <string name="studio_prompt_hint">描述你想生成的画面、风格、主体和细节</string>
     <string name="studio_prompt_counter_hint">建议写清主体、构图、光线、材质和禁用元素。</string>
@@ -33,8 +33,8 @@
     <string name="studio_status_waiting">填写提示词并绑定可用渠道后即可提交。</string>
     <string name="studio_status_no_prompt">请先填写提示词。</string>
     <string name="studio_status_no_channel">请先绑定或启用一个可用渠道。</string>
-    <string name="studio_status_no_listener">表单请求已整理完成，等待主线程接入提交逻辑。</string>
+    <string name="studio_status_no_listener">表单请求已整理完成，但提交处理器未绑定。</string>
     <string name="studio_status_submitting">正在提交生成任务。</string>
-    <string name="studio_result_title">结果占位</string>
-    <string name="studio_result_placeholder">生成结果会在这里展示，当前仅保留占位区域。</string>
+    <string name="studio_result_title">本次结果</string>
+    <string name="studio_result_placeholder">生成完成后会显示保存数量和本地路径预览。</string>
 </resources>

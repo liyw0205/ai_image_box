@@ -13,12 +13,12 @@
     <string name="badge_channels">多接口 provider 管理</string>
 
     <string name="studio_headline">统一的多接口创作工作台</string>
-    <string name="studio_body">0.1.0 先建立 Android 原生壳。下一步会接入渠道配置、标准生成请求、OpenAI-compatible 生图和本地缓存。</string>
-    <string name="studio_status">当前已初始化应用私有目录，后续会写入 channels.json、task_state.json、generation_records.jsonl 和生成文件缓存。</string>
+    <string name="studio_body">当前已接入 OpenAI-compatible 文生图链路，可从启用渠道提交任务，生成结果会保存到本地缓存并进入历史。</string>
+    <string name="studio_status">已写入 channels.json、task_state.json、generation_records.jsonl 和生成文件缓存；后续继续补图生图、生视频和多 provider 回退。</string>
 
     <string name="tasks_headline">任务队列会承载长生图和异步生视频</string>
     <string name="tasks_body">队列会记录 Queued、Running、Polling、Downloading、Succeeded、Failed 和 Canceled 状态，并支持重试、取消和错误复现。</string>
-    <string name="tasks_status">0.1.0 只保留入口。0.3.0 起接入 GenerationManager；0.5.0 起接入生视频轮询前台服务。</string>
+    <string name="tasks_status">0.3.0 起已接入 GenerationManager；后续补取消、重试、清理已完成和 0.5.0 生视频轮询前台服务。</string>
 
     <string name="history_headline">历史记录用于复用参数和追踪接口表现</string>
     <string name="history_body">每次生成都会保存 provider、model、耗时、请求摘要、响应预览、本地结果文件和 attempts，方便复用和诊断。</string>
@@ -73,6 +73,7 @@
     <string name="action_enable">启用</string>
     <string name="action_copy">复制</string>
     <string name="action_delete">删除</string>
+    <string name="action_reuse_parameters">复用参数</string>
 
     <string name="channel_test_no_adapter">当前 provider 类型暂不支持测试：%1$s</string>
     <string name="channel_test_running">正在测试“%1$s”的模型列表。</string>
@@ -85,6 +86,7 @@
     <string name="studio_generate_enqueued">任务已加入队列：%1$s</string>
     <string name="studio_generate_started">正在调用 %1$s / %2$s。</string>
     <string name="studio_generate_succeeded">生成成功，已保存：%1$s</string>
+    <string name="studio_generate_succeeded_multi">生成成功，共 %1$d 张：\n%2$s</string>
     <string name="studio_generate_failed">生成失败：%1$s</string>
     <string name="studio_generate_cancelled">任务已取消：%1$s</string>
 
@@ -93,5 +95,7 @@
     <string name="task_card_detail">目标：%1$s / %2$s\n状态：%3$s\n结果大小：%4$s</string>
     <string name="history_summary">最近 %1$d 条生成记录。</string>
     <string name="history_empty">暂无生成历史。成功或失败的任务都会写入这里。</string>
-    <string name="history_card_detail">目标：%1$s / %2$s\n状态：%3$s\n文件：%4$s\n错误：%5$s</string>
+    <string name="history_card_detail">目标：%1$s / %2$s\n状态：%3$s\n结果：%4$d 张\n文件：%5$s\n错误：%6$s</string>
+    <string name="history_thumbnail">历史结果缩略图</string>
+    <string name="history_reuse_applied">已复用任务 %1$s 的提示词和参数。</string>
 </resources>

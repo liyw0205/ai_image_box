@@ -66,14 +66,45 @@ data class GenerationRequest(
     val createdAtMillis: Long = System.currentTimeMillis(),
 )
 
-class GenerationResult(
+data class GenerationAsset(
     val bytes: ByteArray,
     val mimeType: String = "image/png",
     val fileNameHint: String? = null,
     val metadata: Map<String, String> = emptyMap(),
+)
+
+class GenerationResult(
+    val assets: List<GenerationAsset>,
+    val metadata: Map<String, String> = emptyMap(),
 ) {
+    constructor(
+        bytes: ByteArray,
+        mimeType: String = "image/png",
+        fileNameHint: String? = null,
+        metadata: Map<String, String> = emptyMap(),
+    ) : this(
+        assets = listOf(
+            GenerationAsset(
+                bytes = bytes,
+                mimeType = mimeType,
+                fileNameHint = fileNameHint,
+                metadata = metadata,
+            ),
+        ),
+        metadata = metadata,
+    )
+
+    val bytes: ByteArray
+        get() = assets.firstOrNull()?.bytes ?: ByteArray(0)
+
+    val mimeType: String
+        get() = assets.firstOrNull()?.mimeType ?: "image/png"
+
+    val fileNameHint: String?
+        get() = assets.firstOrNull()?.fileNameHint
+
     val byteCount: Int
-        get() = bytes.size
+        get() = assets.sumOf { it.bytes.size }
 }
 
 enum class GenerationStatus {
