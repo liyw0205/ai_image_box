@@ -74,15 +74,30 @@ data class GenerationAsset(
     val metadata: Map<String, String> = emptyMap(),
 )
 
+data class GenerationAttemptSummary(
+    val status: GenerationStatus,
+    val channelId: String,
+    val channelName: String,
+    val providerType: String,
+    val model: String,
+    val requestId: String = "",
+    val httpStatus: Int? = null,
+    val elapsedMillis: Long? = null,
+    val errorMessage: String = "",
+    val rawPreview: String = "",
+)
+
 class GenerationResult(
     val assets: List<GenerationAsset>,
     val metadata: Map<String, String> = emptyMap(),
+    val attempts: List<GenerationAttemptSummary> = emptyList(),
 ) {
     constructor(
         bytes: ByteArray,
         mimeType: String = "image/png",
         fileNameHint: String? = null,
         metadata: Map<String, String> = emptyMap(),
+        attempts: List<GenerationAttemptSummary> = emptyList(),
     ) : this(
         assets = listOf(
             GenerationAsset(
@@ -93,6 +108,7 @@ class GenerationResult(
             ),
         ),
         metadata = metadata,
+        attempts = attempts,
     )
 
     val bytes: ByteArray

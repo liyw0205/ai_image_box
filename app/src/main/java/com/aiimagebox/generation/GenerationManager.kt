@@ -2,12 +2,14 @@ package com.aiimagebox.generation
 
 import com.aiimagebox.data.ModelTarget
 import com.aiimagebox.data.ProviderChannel
+import com.aiimagebox.provider.AttemptRecord as ProviderAttemptRecord
 import com.aiimagebox.provider.GenerationMode as ProviderGenerationMode
 import com.aiimagebox.provider.GenerationRequest as ProviderGenerationRequest
 import com.aiimagebox.provider.GenerationResult as ProviderGenerationResult
 import com.aiimagebox.provider.GenerationStatus as ProviderGenerationStatus
 import com.aiimagebox.provider.ImageResponseFormat
 import com.aiimagebox.provider.MediaReference
+import com.aiimagebox.provider.ProviderCapabilities
 import com.aiimagebox.provider.ProviderRegistry
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -48,11 +51,47 @@ class ProviderRegistryGenerationExecutor(
                 "ProviderRegistryGenerationExecutor requires GenerationTarget.channel. " +
                     "Use GenerationTarget.fromChannel(...) or pass a custom GenerationExecutor.",
             )
-        val adapter = registry.require(request.target.providerType.ifBlank { channel.providerType })
         val providerRequest = request.toProviderRequest()
-        val providerTarget = request.target.toModelTarget(channel)
-        val providerResult = adapter.generate(channel, providerRequest, providerTarget)
-        return providerResult.toGenerationResult(request)
+        val attempts = mutableListOf<ProviderAttemptRecord>()
+        var lastResult: ProviderGenerationResult? = null
+
+        for (providerTarget in request.fallbackTargets(channel)) {
+            val adapter = registry.get(providerTarget.providerType)
+            if (adapter == null) {
+                val skipped = localFailure(providerTarget, "Unsupported provider type: ${providerTarget.providerType}")
+                attempts.addAll(skipped.attempts)
+                lastResult = skipped.copy(attempts = attempts.toList())
+                continue
+            }
+            val capabilities = adapter.capabilities(channel)
+            if (!providerRequest.mode.isSupportedBy(capabilities)) {
+                val skipped = localFailure(
+                    providerTarget,
+                    "Provider ${providerTarget.providerType} does not support ${providerRequest.mode}.",
+                )
+                attempts.addAll(skipped.attempts)
+                lastResult = skipped.copy(attempts = attempts.toList())
+                continue
+            }
+
+            val providerResult = adapter.generate(channel, providerRequest, providerTarget)
+            attempts.addAll(
+                providerResult.attempts.ifEmpty {
+                    listOf(providerResult.toAttemptRecord(providerTarget))
+                },
+            )
+            val resultWithAttempts = providerResult.copy(attempts = attempts.toList())
+            if (providerResult.status == ProviderGenerationStatus.SUCCEEDED) {
+                return resultWithAttempts.toGenerationResult(request)
+            }
+            lastResult = resultWithAttempts
+        }
+
+        val finalResult = lastResult ?: localFailure(
+            target = request.target.toModelTarget(channel),
+            error = "No usable provider target was available.",
+        )
+        throw GenerationProviderException(finalResult)
     }
 
     private fun GenerationRequest.toProviderRequest(): ProviderGenerationRequest {
@@ -132,6 +171,52 @@ class ProviderRegistryGenerationExecutor(
         )
     }
 
+    private fun GenerationRequest.fallbackTargets(channel: ProviderChannel): List<ModelTarget> {
+        val selected = target.toModelTarget(channel)
+        val configured = registry.targetsFor(listOf(channel))
+        return (listOf(selected) + configured)
+            .filter { it.model.isNotBlank() }
+            .distinctBy { "${it.channelId}\u0000${it.providerType}\u0000${it.model}" }
+    }
+
+    private fun ProviderGenerationMode.isSupportedBy(capabilities: ProviderCapabilities): Boolean {
+        return when (this) {
+            ProviderGenerationMode.TEXT_TO_IMAGE -> capabilities.textToImage
+            ProviderGenerationMode.IMAGE_TO_IMAGE -> capabilities.imageToImage
+            ProviderGenerationMode.TEXT_TO_VIDEO -> capabilities.textToVideo
+            ProviderGenerationMode.IMAGE_TO_VIDEO -> capabilities.imageToVideo
+        }
+    }
+
+    private fun localFailure(target: ModelTarget, error: String): ProviderGenerationResult {
+        return ProviderGenerationResult(
+            status = ProviderGenerationStatus.FAILED,
+            usedModel = target.model,
+            error = error,
+            attempts = listOf(
+                ProviderAttemptRecord(
+                    providerType = target.providerType,
+                    channelName = target.channelName,
+                    model = target.model,
+                    error = error,
+                ),
+            ),
+        )
+    }
+
+    private fun ProviderGenerationResult.toAttemptRecord(target: ModelTarget): ProviderAttemptRecord {
+        return ProviderAttemptRecord(
+            providerType = target.providerType,
+            channelName = target.channelName,
+            model = usedModel.ifBlank { target.model },
+            httpStatus = httpStatus,
+            elapsedMillis = elapsedMillis,
+            requestId = requestId,
+            error = error,
+            rawPreview = rawPreview,
+        )
+    }
+
     private fun ProviderGenerationResult.toGenerationResult(request: GenerationRequest): GenerationResult {
         if (status != ProviderGenerationStatus.SUCCEEDED) {
             throw GenerationProviderException(this)
@@ -148,6 +233,8 @@ class ProviderRegistryGenerationExecutor(
             put("elapsed_ms", elapsedMillis.toString())
             rawPreview.takeIf { it.isNotBlank() }?.let { put("raw_preview", it) }
             put("image_count", images.size.toString())
+            put("attempt_count", attempts.size.toString())
+            if (attempts.isNotEmpty()) put("attempts", attempts.toJson().toString())
         }
         val assets = images.mapIndexed { index, asset ->
             GenerationAsset(
@@ -166,7 +253,51 @@ class ProviderRegistryGenerationExecutor(
         return GenerationResult(
             assets = assets,
             metadata = metadata,
+            attempts = attempts.map { it.toSummary(request) },
         )
+    }
+
+    private fun List<ProviderAttemptRecord>.toJson(): JSONArray {
+        val array = JSONArray()
+        forEachIndexed { index, attempt ->
+            array.put(
+                JSONObject()
+                    .put("attempt_number", index + 1)
+                    .put("provider_type", attempt.providerType)
+                    .put("channel_name", attempt.channelName)
+                    .put("model", attempt.model)
+                    .put("status", attempt.statusName())
+                    .put("http_status", attempt.httpStatus ?: JSONObject.NULL)
+                    .put("elapsed_ms", attempt.elapsedMillis)
+                    .put("request_id", attempt.requestId)
+                    .put("error", attempt.error)
+                    .put("raw_preview", attempt.rawPreview),
+            )
+        }
+        return array
+    }
+
+    private fun ProviderAttemptRecord.toSummary(request: GenerationRequest): GenerationAttemptSummary {
+        return GenerationAttemptSummary(
+            status = if (isSuccessful()) GenerationStatus.SUCCEEDED else GenerationStatus.FAILED,
+            channelId = request.target.channelId,
+            channelName = channelName.ifBlank { request.target.channelName },
+            providerType = providerType.ifBlank { request.target.providerType },
+            model = model.ifBlank { request.target.model },
+            requestId = requestId,
+            httpStatus = httpStatus,
+            elapsedMillis = elapsedMillis,
+            errorMessage = error,
+            rawPreview = rawPreview,
+        )
+    }
+
+    private fun ProviderAttemptRecord.statusName(): String {
+        return if (isSuccessful()) "SUCCEEDED" else "FAILED"
+    }
+
+    private fun ProviderAttemptRecord.isSuccessful(): Boolean {
+        return error.isBlank() && (httpStatus == null || httpStatus in 200..299)
     }
 }
 

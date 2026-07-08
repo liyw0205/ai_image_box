@@ -39,6 +39,7 @@ import com.aiimagebox.data.MediaReference as StoredMediaReference
 import com.aiimagebox.data.ProviderChannel
 import com.aiimagebox.data.SecureKeyStore
 import com.aiimagebox.generation.GenerationEvent
+import com.aiimagebox.generation.GenerationAttemptSummary
 import com.aiimagebox.generation.GenerationManager
 import com.aiimagebox.generation.GenerationParameters
 import com.aiimagebox.generation.GenerationProviderException
@@ -348,7 +349,7 @@ class MainActivity : AppCompatActivity() {
                             status = StoredGenerationStatus.FAILED,
                             errorMessage = event.error.message ?: event.error::class.java.simpleName,
                             completedAt = System.currentTimeMillis(),
-                            attempts = it.attempts + storedAttempt(event, StoredGenerationStatus.FAILED, event.error.message ?: ""),
+                            attempts = it.attempts + storedAttempts(event, StoredGenerationStatus.FAILED, event.error.message ?: ""),
                         )
                     }
                     if (updated != null) generationStore.appendRecord(updated)
@@ -410,7 +411,7 @@ class MainActivity : AppCompatActivity() {
             it.copy(
                 status = StoredGenerationStatus.SUCCEEDED,
                 assets = it.assets + assets,
-                attempts = it.attempts + storedAttempt(event, StoredGenerationStatus.SUCCEEDED, ""),
+                attempts = it.attempts + storedAttempts(event, StoredGenerationStatus.SUCCEEDED, ""),
                 errorMessage = "",
                 completedAt = System.currentTimeMillis(),
             )
@@ -419,10 +420,55 @@ class MainActivity : AppCompatActivity() {
         return assets.map { it.media.filePath }
     }
 
+    private fun storedAttempts(
+        event: GenerationEvent,
+        status: StoredGenerationStatus,
+        error: String,
+    ): List<StoredAttemptRecord> {
+        val summaries = when (event) {
+            is GenerationEvent.Succeeded -> event.result.attempts
+            is GenerationEvent.Failed -> {
+                val providerError = event.error as? GenerationProviderException
+                providerError?.providerResult?.attempts?.map { attempt ->
+                    GenerationAttemptSummary(
+                        status = if (attempt.error.isBlank() && (attempt.httpStatus == null || attempt.httpStatus in 200..299)) {
+                            QueueGenerationStatus.SUCCEEDED
+                        } else {
+                            QueueGenerationStatus.FAILED
+                        },
+                        channelId = event.item.request.target.channelId,
+                        channelName = attempt.channelName.ifBlank { event.item.request.target.channelName },
+                        providerType = attempt.providerType.ifBlank { event.item.request.target.providerType },
+                        model = attempt.model.ifBlank { event.item.request.target.model },
+                        requestId = attempt.requestId,
+                        httpStatus = attempt.httpStatus,
+                        elapsedMillis = attempt.elapsedMillis,
+                        errorMessage = attempt.error,
+                        rawPreview = attempt.rawPreview,
+                    )
+                }.orEmpty()
+            }
+            else -> emptyList()
+        }
+        if (summaries.isEmpty()) return listOf(storedAttempt(event, status, error))
+        return summaries.mapIndexed { index, summary ->
+            val attemptStatus = summary.status.toStoredStatus(status)
+            storedAttempt(
+                event = event,
+                status = attemptStatus,
+                error = summary.errorMessage.ifBlank { if (attemptStatus == StoredGenerationStatus.FAILED) error else "" },
+                summary = summary,
+                attemptNumber = index + 1,
+            )
+        }
+    }
+
     private fun storedAttempt(
         event: GenerationEvent,
         status: StoredGenerationStatus,
         error: String,
+        summary: GenerationAttemptSummary? = null,
+        attemptNumber: Int = 1,
     ): StoredAttemptRecord {
         val item = when (event) {
             is GenerationEvent.Succeeded -> event.item
@@ -434,16 +480,29 @@ class MainActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val providerError = (event as? GenerationEvent.Failed)?.error as? GenerationProviderException
         val successResult = (event as? GenerationEvent.Succeeded)?.result
+        val attemptProviderType = summary?.providerType ?: item.request.target.providerType
+        val attemptChannelName = summary?.channelName ?: item.request.target.channelName
+        val attemptModel = summary?.model ?: item.request.target.model
         val requestJson = JSONObject()
             .put("prompt", item.request.prompt)
             .put("channel_id", item.request.target.channelId)
-            .put("model", item.request.target.model)
+            .put("provider_type", attemptProviderType)
+            .put("model", attemptModel)
             .put("aspect_ratio", item.request.parameters.aspectRatio)
             .put("resolution", item.request.parameters.resolution ?: item.request.parameters.size.orEmpty())
             .put("count", item.request.parameters.count)
             .put("reference_images", JSONArray(item.request.parameters.referenceImagePaths))
             .toString()
-        val responseJson = providerError?.providerResult?.let { result ->
+        val responseJson = summary?.let { attempt ->
+            JSONObject()
+                .put("provider_status", attempt.status.name)
+                .put("provider_request_id", attempt.requestId)
+                .put("http_status", attempt.httpStatus ?: JSONObject.NULL)
+                .put("elapsed_ms", attempt.elapsedMillis ?: JSONObject.NULL)
+                .put("raw_preview", attempt.rawPreview)
+                .put("error", attempt.errorMessage)
+                .toString()
+        } ?: providerError?.providerResult?.let { result ->
             JSONObject()
                 .put("provider_status", result.status.name)
                 .put("provider_request_id", result.requestId)
@@ -466,20 +525,33 @@ class MainActivity : AppCompatActivity() {
         val successDurationMs = successResult?.metadata?.get("elapsed_ms")?.toLongOrNull()
         return StoredAttemptRecord(
             taskId = item.request.id,
-            attemptNumber = 1,
+            attemptNumber = attemptNumber,
             status = status,
             channelId = item.request.target.channelId,
-            channelName = item.request.target.channelName,
-            providerType = item.request.target.providerType,
-            model = item.request.target.model,
+            channelName = attemptChannelName,
+            providerType = attemptProviderType,
+            model = attemptModel,
             requestJson = requestJson,
             responseJson = responseJson,
-            httpStatusCode = providerError?.providerResult?.httpStatus ?: successHttpStatus,
-            errorMessage = error.ifBlank { providerError?.providerResult?.error.orEmpty() },
+            httpStatusCode = summary?.httpStatus ?: providerError?.providerResult?.httpStatus ?: successHttpStatus,
+            errorMessage = error.ifBlank { summary?.errorMessage ?: providerError?.providerResult?.error.orEmpty() },
             startedAt = item.startedAtMillis ?: now,
             endedAt = now,
-            durationMs = providerError?.providerResult?.elapsedMillis ?: successDurationMs ?: (item.startedAtMillis ?: now).let { now - it },
+            durationMs = summary?.elapsedMillis
+                ?: providerError?.providerResult?.elapsedMillis
+                ?: successDurationMs
+                ?: (item.startedAtMillis ?: now).let { now - it },
         )
+    }
+
+    private fun QueueGenerationStatus.toStoredStatus(defaultStatus: StoredGenerationStatus): StoredGenerationStatus {
+        return when (this) {
+            QueueGenerationStatus.QUEUED -> StoredGenerationStatus.QUEUED
+            QueueGenerationStatus.RUNNING -> StoredGenerationStatus.RUNNING
+            QueueGenerationStatus.SUCCEEDED -> StoredGenerationStatus.SUCCEEDED
+            QueueGenerationStatus.FAILED -> StoredGenerationStatus.FAILED
+            QueueGenerationStatus.CANCELLED -> StoredGenerationStatus.CANCELED
+        }.takeIf { it.isTerminal } ?: defaultStatus
     }
 
     private fun imageSize(resolution: String, aspectRatio: String): String {

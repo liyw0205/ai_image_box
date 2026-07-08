@@ -14,7 +14,7 @@
 
     <string name="studio_headline">统一的多接口创作工作台</string>
     <string name="studio_body">当前已接入 OpenAI-compatible、Gemini、Agnes、Grok 图像链路，可从启用渠道选择模型提交任务，生成结果会保存到本地缓存并进入历史。</string>
-    <string name="studio_status">已写入 channels.json、task_state.json、generation_records.jsonl 和生成文件缓存；后续继续补生视频和自动回退。</string>
+    <string name="studio_status">已写入 channels.json、task_state.json、generation_records.jsonl 和生成文件缓存；已支持同渠道模型自动回退，后续继续补生视频。</string>
 
     <string name="tasks_headline">任务队列会承载长生图和异步生视频</string>
     <string name="tasks_body">队列会记录 Queued、Running、Polling、Downloading、Succeeded、Failed 和 Canceled 状态，并支持重试、取消和错误复现。</string>

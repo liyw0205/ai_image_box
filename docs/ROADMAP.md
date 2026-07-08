@@ -170,14 +170,14 @@
 
 ## 0.4.0 图生图和多 provider 回退
 
-目标：迁移插件的主要生图能力。
+状态：初版已完成。图生图参考图、Gemini/Agnes/Grok 图像 adapter、同渠道模型自动回退和多 attempts 记录已接入；当前回退范围先覆盖当前渠道的启用模型，跨渠道自动路由后续继续扩展。
 
 - 图生图参考图。
 - Gemini image adapter。
 - Agnes image adapter。
 - Grok image adapter。
-- 模型优先级。
-- 多 provider 尝试记录。
+- 同渠道模型优先级和失败回退。
+- 多次 provider 尝试记录。
 
 验收：
 
@@ -254,7 +254,7 @@
 
 ## 当前下一步
 
-1. 开始 0.3.10 真机接口实测，重点验证 OpenAI-compatible、Gemini、Agnes、Grok 的请求格式。
-2. 补自动回退：按启用模型顺序展开目标，失败后尝试下一个可用模型。
+1. 开始 0.4.0 真机接口实测，重点验证 OpenAI-compatible、Gemini、Agnes、Grok 的请求格式和回退 attempts。
+2. 扩展跨渠道自动回退：按所有启用渠道和模型顺序展开目标。
 3. 为渠道配置补 API Key 快速校验、更多常见接口预设和模型类型批量修改。
 4. 开始 0.5.0 生视频抽象，先落地 Grok/Seedance 的提交、轮询和下载流程。
