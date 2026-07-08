@@ -200,7 +200,10 @@ class MainActivity : AppCompatActivity() {
         val generationRequest = GenerationRequest(
             prompt = request.prompt,
             target = GenerationTarget.fromChannel(channel, request.model)
-                .copy(providerType = request.providerType.ifBlank { channel.providerType }),
+                .copy(
+                    providerType = request.providerType.ifBlank { channel.providerType },
+                    extra = request.workflowExtra(),
+                ),
             parameters = GenerationParameters(
                 aspectRatio = request.aspectRatio,
                 resolution = imageSize(request.resolution, request.aspectRatio),
@@ -216,6 +219,16 @@ class MainActivity : AppCompatActivity() {
         binding.studioForm.setSubmitting(true)
         binding.studioForm.setStatus(getString(R.string.studio_generate_enqueued, generationRequest.id.take(8)))
         generationManager.enqueue(generationRequest)
+    }
+
+    private fun StudioForm.StudioSubmitRequest.workflowExtra(): Map<String, Any?> {
+        return mapOf(
+            KEY_WORKFLOW_ID to workflowId.ifBlank { "text_to_image" },
+            KEY_WORKFLOW_LABEL to workflowLabel,
+            KEY_WORKFLOW_SUMMARY to workflowSummary,
+            KEY_WORKFLOW_STEPS to workflowSteps,
+            KEY_WORKFLOW_REQUIRES_REFERENCE to workflowRequiresReference,
+        )
     }
 
     private fun createStoredTask(request: GenerationRequest): GenerationTask {
@@ -234,9 +247,59 @@ class MainActivity : AppCompatActivity() {
                     .put("resolution", request.parameters.resolution ?: request.parameters.size ?: "1024x1024")
                     .put("count", request.parameters.count)
                     .put("reference_images", JSONArray(request.parameters.referenceImagePaths))
+                    .putWorkflow(request.target)
                     .toString(),
             ),
         )
+    }
+
+    private fun JSONObject.putWorkflow(target: GenerationTarget): JSONObject {
+        put(KEY_WORKFLOW_ID, target.workflowValue(KEY_WORKFLOW_ID).ifBlank { "text_to_image" })
+        put(KEY_WORKFLOW_LABEL, target.workflowValue(KEY_WORKFLOW_LABEL))
+        put(KEY_WORKFLOW_SUMMARY, target.workflowValue(KEY_WORKFLOW_SUMMARY))
+        put(KEY_WORKFLOW_STEPS, JSONArray(target.workflowSteps()))
+        put(KEY_WORKFLOW_REQUIRES_REFERENCE, target.workflowBoolean(KEY_WORKFLOW_REQUIRES_REFERENCE))
+        return this
+    }
+
+    private fun workflowExtraFromParameters(parameters: JSONObject): Map<String, Any?> {
+        val workflowId = parameters.optString(KEY_WORKFLOW_ID, "").trim()
+        if (workflowId.isBlank()) return emptyMap()
+        return mapOf(
+            KEY_WORKFLOW_ID to workflowId,
+            KEY_WORKFLOW_LABEL to parameters.optString(KEY_WORKFLOW_LABEL, ""),
+            KEY_WORKFLOW_SUMMARY to parameters.optString(KEY_WORKFLOW_SUMMARY, ""),
+            KEY_WORKFLOW_STEPS to parameters.optJSONArray(KEY_WORKFLOW_STEPS).toStringList(),
+            KEY_WORKFLOW_REQUIRES_REFERENCE to parameters.optBoolean(KEY_WORKFLOW_REQUIRES_REFERENCE, false),
+        )
+    }
+
+    private fun GenerationTarget.workflowValue(key: String): String = (extra[key] as? String).orEmpty()
+
+    private fun GenerationTarget.workflowBoolean(key: String): Boolean = when (val value = extra[key]) {
+        is Boolean -> value
+        is String -> value.equals("true", ignoreCase = true)
+        else -> false
+    }
+
+    private fun GenerationTarget.workflowSteps(): List<String> {
+        return when (val value = extra[KEY_WORKFLOW_STEPS]) {
+            is JSONArray -> value.toStringList()
+            is Iterable<*> -> value.mapNotNull { it?.toString()?.trim()?.takeIf { text -> text.isNotBlank() } }
+            is Array<*> -> value.mapNotNull { it?.toString()?.trim()?.takeIf { text -> text.isNotBlank() } }
+            is String -> value.split("->", ",", "\n").map { it.trim() }.filter { it.isNotBlank() }
+            else -> emptyList()
+        }
+    }
+
+    private fun JSONArray?.toStringList(): List<String> {
+        if (this == null) return emptyList()
+        val values = mutableListOf<String>()
+        for (index in 0 until length()) {
+            val value = optString(index, "").trim()
+            if (value.isNotBlank()) values.add(value)
+        }
+        return values
     }
 
     private fun restorePendingTasks() {
@@ -287,7 +350,10 @@ class MainActivity : AppCompatActivity() {
             id = id,
             prompt = prompt,
             target = GenerationTarget.fromChannel(channel, model.ifBlank { channel.defaultModel })
-                .copy(providerType = providerType.ifBlank { channel.providerType }),
+                .copy(
+                    providerType = providerType.ifBlank { channel.providerType },
+                    extra = workflowExtraFromParameters(parameters),
+                ),
             parameters = GenerationParameters(
                 aspectRatio = parameters.optString("aspect_ratio", "1:1"),
                 resolution = parameters.optString("resolution", "1024x1024"),
@@ -492,6 +558,7 @@ class MainActivity : AppCompatActivity() {
             .put("resolution", item.request.parameters.resolution ?: item.request.parameters.size.orEmpty())
             .put("count", item.request.parameters.count)
             .put("reference_images", JSONArray(item.request.parameters.referenceImagePaths))
+            .putWorkflow(item.request.target)
             .toString()
         val responseJson = summary?.let { attempt ->
             JSONObject()
@@ -892,6 +959,8 @@ class MainActivity : AppCompatActivity() {
             aspectRatio = parameters.optString("aspect_ratio", "1:1"),
             resolution = parameters.optString("resolution", "1024"),
             quantity = parameters.optInt("count", 1).coerceIn(1, 4),
+            workflowKey = parameters.optString(KEY_WORKFLOW_ID, ""),
+            draftReferenceImagePath = parameters.optJSONArray("reference_images")?.optString(0, "").orEmpty(),
         )
         binding.studioForm.setStatus(getString(R.string.history_reuse_applied, record.taskId.take(8)))
     }
@@ -1854,6 +1923,11 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val KEY_TAB = "current_tab"
+        private const val KEY_WORKFLOW_ID = "workflow_id"
+        private const val KEY_WORKFLOW_LABEL = "workflow_label"
+        private const val KEY_WORKFLOW_SUMMARY = "workflow_summary"
+        private const val KEY_WORKFLOW_STEPS = "workflow_steps"
+        private const val KEY_WORKFLOW_REQUIRES_REFERENCE = "workflow_requires_reference"
         private const val MAX_VISIBLE_MODELS = 200
         private const val REQUEST_WRITE_EXTERNAL_STORAGE = 2001
     }

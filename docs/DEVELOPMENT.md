@@ -2,7 +2,7 @@
 
 ## 当前仓库状态
 
-`https://github.com/liyw0205/ai_image_box` 已进入 Android 原生工程开发。0.4.2 多图像 provider 与蓝白创作预设增强已经完成，包含通用蓝白配色、卡片式提示词预设、预设使用/编辑、OpenAI-compatible、Gemini、Agnes、Grok 图像适配器、同渠道模型失败自动回退、attempts 记录、自定义预设、创作表单模型选择弹窗、可选参考图、多图预览、公共目录导出、任务队列取消/重试/清理、重启恢复、请求/响应详情、常见 provider 错误中文化、历史缩略图、参数复用、多图结果落盘、基础渠道管理、扩展 JSON 可视化/JSON 切换、已配置模型类型可视化编辑、上游模型拉取/筛选/保存、模型类型推断与手动修改、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
+`https://github.com/liyw0205/ai_image_box` 已进入 Android 原生工程开发。0.4.3 多图像 provider 与工作流创作台已经完成，包含参考 Neribox UI 的浅灰蓝配色、MediaVault 式工作流选择、工作流参数落库和详情复用、卡片式提示词预设、预设使用/编辑、OpenAI-compatible、Gemini、Agnes、Grok 图像适配器、同渠道模型失败自动回退、attempts 记录、自定义预设、创作表单模型选择弹窗、可选参考图、多图预览、公共目录导出、任务队列取消/重试/清理、重启恢复、请求/响应详情、常见 provider 错误中文化、历史缩略图、参数复用、多图结果落盘、基础渠道管理、扩展 JSON 可视化/JSON 切换、已配置模型类型可视化编辑、上游模型拉取/筛选/保存、模型类型推断与手动修改、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
 
 ```text
 /data/data/com.termux/files/home/devwork/ai_image_box
@@ -11,7 +11,7 @@
 构建产物：
 
 ```text
-/data/data/com.termux/files/home/devwork/AIImageBox_0.4.2_debug.apk
+/data/data/com.termux/files/home/devwork/AIImageBox_0.4.3_debug.apk
 ```
 
 ## 技术基线

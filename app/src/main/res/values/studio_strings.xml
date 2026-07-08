@@ -16,6 +16,12 @@
     <string name="action_add_preset">新增预设</string>
     <string name="studio_prompt_hint">描述你想生成的画面、风格、主体和细节</string>
     <string name="studio_prompt_counter_hint">建议写清主体、构图、光线、材质和禁用元素。</string>
+    <string name="studio_workflow_title">工作流</string>
+    <string name="studio_workflow_select">选择</string>
+    <string name="studio_workflow_select_title">选择创作工作流</string>
+    <string name="studio_workflow_steps_format">流程：%1$s</string>
+    <string name="studio_workflow_selected">已切换工作流：%1$s</string>
+    <string name="studio_workflow_reference_required">当前工作流需要参考图，请先选择图片或切换到文生图。</string>
     <string name="studio_channel_title">渠道/模型</string>
     <string name="studio_channel_select">选择</string>
     <string name="studio_channel_select_title">选择渠道和模型</string>

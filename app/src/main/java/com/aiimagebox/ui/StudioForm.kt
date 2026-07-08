@@ -39,6 +39,7 @@ class StudioForm @JvmOverloads constructor(
     private var quantity = DEFAULT_QUANTITY
     private var submitting = false
     private var referenceImagePath = ""
+    private var selectedWorkflowKey = DEFAULT_WORKFLOW_KEY
 
     var onSubmit: ((StudioSubmitRequest) -> Unit)? = null
     var onSavePublic: (() -> Unit)? = null
@@ -49,6 +50,7 @@ class StudioForm @JvmOverloads constructor(
         binding.studioResolutionGroup.check(binding.studioResolution1024.id)
         binding.studioPromptInput.doAfterTextChanged { updateSubmitState() }
         binding.studioPromptPresetButton.setOnClickListener { showPromptPresetPicker() }
+        binding.studioWorkflowSelectButton.setOnClickListener { showWorkflowPicker() }
         binding.studioNextTargetButton.setOnClickListener { showTargetPicker() }
         binding.studioQuantityMinus.setOnClickListener { setQuantity(quantity - 1) }
         binding.studioQuantityPlus.setOnClickListener { setQuantity(quantity + 1) }
@@ -58,6 +60,7 @@ class StudioForm @JvmOverloads constructor(
         binding.studioClearReferenceButton.setOnClickListener { clearReferenceImage() }
 
         setQuantity(DEFAULT_QUANTITY)
+        renderSelectedWorkflow()
         renderSelectedTarget()
         setStatus(TEXT_STATUS_WAITING)
         setResultPlaceholder(TEXT_RESULT_PLACEHOLDER)
@@ -268,6 +271,48 @@ class StudioForm @JvmOverloads constructor(
         }
     }
 
+    private fun showWorkflowPicker() {
+        val workflows = STUDIO_WORKFLOWS
+        val selectedIndex = workflows.indexOfFirst { it.key == selectedWorkflowKey }.takeIf { it >= 0 } ?: 0
+        val labels = workflows.map { workflow ->
+            "${workflow.title}\n${workflow.summary}"
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.studio_workflow_select_title)
+            .setSingleChoiceItems(labels, selectedIndex) { dialog, which ->
+                selectedWorkflowKey = workflows[which].key
+                renderSelectedWorkflow()
+                setStatus(context.getString(R.string.studio_workflow_selected, workflows[which].title))
+                dialog.dismiss()
+                updateSubmitState()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun renderSelectedWorkflow() {
+        val workflow = selectedWorkflow()
+        binding.studioWorkflowName.text = workflow.title
+        binding.studioWorkflowSummary.text = workflow.summary
+        binding.studioWorkflowSteps.text = context.getString(
+            R.string.studio_workflow_steps_format,
+            workflow.steps.joinToString(" -> "),
+        )
+    }
+
+    private fun selectedWorkflow(): StudioWorkflow {
+        return STUDIO_WORKFLOWS.firstOrNull { it.key == selectedWorkflowKey } ?: STUDIO_WORKFLOWS.first()
+    }
+
+    private fun selectWorkflow(workflowKey: String) {
+        if (workflowKey.isBlank()) return
+        val normalized = workflowKey.trim()
+        if (STUDIO_WORKFLOWS.any { it.key == normalized }) {
+            selectedWorkflowKey = normalized
+            renderSelectedWorkflow()
+        }
+    }
+
     fun applyDraft(
         prompt: CharSequence,
         channelId: String,
@@ -275,12 +320,16 @@ class StudioForm @JvmOverloads constructor(
         aspectRatio: String,
         resolution: String,
         quantity: Int,
+        workflowKey: String = "",
+        draftReferenceImagePath: String = "",
     ) {
         setPrompt(prompt)
         selectTarget(channelId, model)
         selectAspectRatio(aspectRatio)
         selectResolution(resolution)
         setQuantity(quantity)
+        selectWorkflow(workflowKey)
+        if (draftReferenceImagePath.isNotBlank()) setReferenceImage(draftReferenceImagePath)
         updateSubmitState()
     }
 
@@ -411,6 +460,12 @@ class StudioForm @JvmOverloads constructor(
             return null
         }
 
+        val workflow = selectedWorkflow()
+        if (workflow.requiresReference && referenceImagePath.isBlank()) {
+            setStatus(context.getString(R.string.studio_workflow_reference_required))
+            return null
+        }
+
         return StudioSubmitRequest(
             prompt = prompt,
             channelId = target.channelId,
@@ -424,6 +479,11 @@ class StudioForm @JvmOverloads constructor(
             timeoutSeconds = target.timeoutSeconds,
             proxy = target.proxy,
             referenceImagePath = referenceImagePath,
+            workflowId = workflow.key,
+            workflowLabel = workflow.title,
+            workflowSummary = workflow.summary,
+            workflowSteps = workflow.steps,
+            workflowRequiresReference = workflow.requiresReference,
         )
     }
 
@@ -643,6 +703,14 @@ class StudioForm @JvmOverloads constructor(
         val prompt: String,
     )
 
+    private data class StudioWorkflow(
+        val key: String,
+        val title: String,
+        val summary: String,
+        val steps: List<String>,
+        val requiresReference: Boolean = false,
+    )
+
     data class StudioChannelTarget(
         val channelId: String,
         val channelName: String,
@@ -666,6 +734,11 @@ class StudioForm @JvmOverloads constructor(
         val timeoutSeconds: Int,
         val proxy: String = "",
         val referenceImagePath: String = "",
+        val workflowId: String = "",
+        val workflowLabel: String = "",
+        val workflowSummary: String = "",
+        val workflowSteps: List<String> = emptyList(),
+        val workflowRequiresReference: Boolean = false,
     )
 
     companion object {
@@ -674,6 +747,7 @@ class StudioForm @JvmOverloads constructor(
         private const val MAX_GALLERY_ITEMS = 12
         private const val MAX_CUSTOM_PROMPT_PRESETS = 50
         private const val DEFAULT_QUANTITY = 1
+        private const val DEFAULT_WORKFLOW_KEY = "text_to_image"
         private const val PREFS_PROMPT_PRESETS = "studio_prompt_presets"
         private const val KEY_CUSTOM_PROMPT_PRESETS = "custom_prompt_presets"
         private const val TEXT_SUBMIT = "开始生成"
@@ -683,10 +757,44 @@ class StudioForm @JvmOverloads constructor(
         private const val TEXT_STATUS_NO_CHANNEL = "请先绑定或启用一个可用渠道。"
         private const val TEXT_STATUS_NO_LISTENER = "表单请求已整理完成，等待主线程接入提交逻辑。"
         private const val TEXT_STATUS_SUBMITTING = "正在提交生成任务。"
-        private const val TEXT_RESULT_PLACEHOLDER = "生成结果会在这里展示，当前仅保留占位区域。"
+        private const val TEXT_RESULT_PLACEHOLDER = "生成完成后会在这里显示图片预览、缩略图和保存入口。"
         private const val TEXT_CHANNEL_EMPTY_TITLE = "无可用渠道"
         private const val TEXT_CHANNEL_EMPTY_BODY = "请先在渠道页启用至少一个模型。"
         private const val TEXT_CHANNEL_MODEL_UNKNOWN = "未指定模型"
+        private val STUDIO_WORKFLOWS = listOf(
+            StudioWorkflow(
+                key = "text_to_image",
+                title = "文生图",
+                summary = "只使用提示词生成图片，适合从零开始构图、风格探索和快速出图。",
+                steps = listOf("提示词", "渠道模型", "生成", "私有缓存/历史"),
+            ),
+            StudioWorkflow(
+                key = "image_to_image",
+                title = "图生图",
+                summary = "使用参考图参与生成，适合保留主体、姿态或构图后进行重绘。",
+                steps = listOf("参考图", "提示词", "图生图请求", "结果预览"),
+                requiresReference = true,
+            ),
+            StudioWorkflow(
+                key = "reference_enhance",
+                title = "参考图增强",
+                summary = "以参考图为核心，优先做清晰度、材质、光线和细节增强。",
+                steps = listOf("参考图", "增强提示词", "模型回退", "导出"),
+                requiresReference = true,
+            ),
+            StudioWorkflow(
+                key = "character_variant",
+                title = "角色变体",
+                summary = "围绕同一主体生成不同风格变体，适合手办化、真人化、Q版化等预设。",
+                steps = listOf("参考图/提示词", "预设", "模型生成", "历史复用"),
+            ),
+            StudioWorkflow(
+                key = "fallback_batch",
+                title = "多模型回退",
+                summary = "优先使用当前模型，失败后沿用同渠道启用模型继续尝试并记录 attempts。",
+                steps = listOf("模型选择", "失败回退", "attempts", "结果归档"),
+            ),
+        )
         private val DEFAULT_PROMPT_PRESETS = listOf(
             PromptPreset(
                 title = "手办化",

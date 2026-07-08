@@ -15,7 +15,7 @@ MediaVault 当前是 Android 原生 Kotlin 项目：
 - `app/src/main/java/com/mediavault/ui/MainActivity.kt`：底部导航、横屏导航轨、抽屉、Fragment 切换、旋转恢复。
 - `app/src/main/java/com/mediavault/scrape/ScrapeForegroundService.kt`：长任务前台服务思路。
 - `app/src/main/java/com/mediavault/data/*`：本地 JSON、诊断、导出导入和缓存管理思路。
-- `app/src/main/res/values/colors.xml`：深色工作台配色。
+- `app/src/main/res/values/colors.xml`：原深色工作台配色参考，AI Image Box 0.4.3 改为 Neribox 浅色系。
 
 ## 应复用的做法
 
@@ -30,6 +30,7 @@ MediaVault 当前是 Android 原生 Kotlin 项目：
 | 诊断包脱敏 | provider 请求、响应、错误和缓存状态 |
 | 横屏 D-pad 焦点回归 | 平板、电视盒子和键盘操作兼容 |
 | Termux 打包脚本 | `pack_ai_image_box.sh` 统一构建 |
+| 首页工作流区 | 创作页增加工作流面板，把入口、状态、步骤和结果归档放在同一条用户路径里 |
 
 ## 不应复用的做法
 
@@ -68,7 +69,7 @@ MediaVault 的刮削侧栏功能密度较高，AI Image Box 可以参考为：
 
 ## 配色约束
 
-沿用深色工作台，不做单一紫蓝渐变或营销页。
+0.4.3 起主配色改为参考 Neribox UI 的浅灰蓝：浅灰页面底、白色面板、灰色边线、蓝色主操作。MediaVault 继续作为工作流组织方式参考，不再直接照搬深色工作台颜色。
 
 推荐角色：
 
@@ -86,7 +87,7 @@ MediaVault 的刮削侧栏功能密度较高，AI Image Box 可以参考为：
 
 新增 UI 要检查：
 
-- 深色背景不配深色字。
+- 背景和文字保持足够对比，避免浅底浅字或深底深字。
 - 按钮文字不溢出。
 - 横屏抽屉不遮挡主任务状态。
 - D-pad 焦点可见，焦点顺序可预测。

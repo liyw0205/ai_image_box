@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="aib_bg">#F5F8FF</color>
+    <color name="aib_bg">#F2F2F2</color>
     <color name="aib_surface">#FFFFFF</color>
-    <color name="aib_surface2">#EEF5FF</color>
-    <color name="aib_line">#C7D7EE</color>
-    <color name="aib_text">#0F172A</color>
-    <color name="aib_text_secondary">#475569</color>
-    <color name="aib_hint">#64748B</color>
-    <color name="aib_primary">#2563EB</color>
-    <color name="aib_primary_dark">#1D4ED8</color>
+    <color name="aib_surface2">#F7F8FA</color>
+    <color name="aib_line">#D6D7D7</color>
+    <color name="aib_text">#212121</color>
+    <color name="aib_text_secondary">#555F6B</color>
+    <color name="aib_hint">#808080</color>
+    <color name="aib_primary">#3D9AE6</color>
+    <color name="aib_primary_dark">#0064B4</color>
     <color name="aib_on_primary">#FFFFFF</color>
-    <color name="aib_danger">#DC2626</color>
-    <color name="aib_pill_bg">#E0ECFF</color>
+    <color name="aib_danger">#DD0000</color>
+    <color name="aib_pill_bg">#EAF4FC</color>
 </resources>
