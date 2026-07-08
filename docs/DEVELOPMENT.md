@@ -2,7 +2,7 @@
 
 ## 当前仓库状态
 
-`https://github.com/liyw0205/ai_image_box` 已进入 Android 原生工程开发。0.4.3 多图像 provider 与工作流创作台已经完成，包含参考 Neribox UI 的浅灰蓝配色、MediaVault 式工作流选择、工作流参数落库和详情复用、卡片式提示词预设、预设使用/编辑、OpenAI-compatible、Gemini、Agnes、Grok 图像适配器、同渠道模型失败自动回退、attempts 记录、自定义预设、创作表单模型选择弹窗、可选参考图、多图预览、公共目录导出、任务队列取消/重试/清理、重启恢复、请求/响应详情、常见 provider 错误中文化、历史缩略图、参数复用、多图结果落盘、基础渠道管理、扩展 JSON 可视化/JSON 切换、已配置模型类型可视化编辑、上游模型拉取/筛选/保存、模型类型推断与手动修改、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
+`https://github.com/liyw0205/ai_image_box` 已进入 Android 原生工程开发。0.4.4 自动发布和创作状态记忆已经完成，包含创作页渠道/模型选择记忆、GitHub Actions 打包 APK 并发布到 Releases、参考 Neribox UI 的浅灰蓝配色、MediaVault 式工作流选择、工作流参数落库和详情复用、卡片式提示词预设、预设使用/编辑、OpenAI-compatible、Gemini、Agnes、Grok 图像适配器、同渠道模型失败自动回退、attempts 记录、自定义预设、创作表单模型选择弹窗、可选参考图、多图预览、公共目录导出、任务队列取消/重试/清理、重启恢复、请求/响应详情、常见 provider 错误中文化、历史缩略图、参数复用、多图结果落盘、基础渠道管理、扩展 JSON 可视化/JSON 切换、已配置模型类型可视化编辑、上游模型拉取/筛选/保存、模型类型推断与手动修改、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
 
 ```text
 /data/data/com.termux/files/home/devwork/ai_image_box
@@ -11,7 +11,7 @@
 构建产物：
 
 ```text
-/data/data/com.termux/files/home/devwork/AIImageBox_0.4.3_debug.apk
+/data/data/com.termux/files/home/devwork/AIImageBox_0.4.4_debug.apk
 ```
 
 ## 技术基线
@@ -219,6 +219,14 @@ Termux 下统一用打包脚本，不裸跑 `./gradlew`。脚本负责：
 - 临时处理 aapt2。
 - 执行 `assembleDebug --no-daemon`。
 - 复制 APK 到 `../AIImageBox_<version>_debug.apk`。
+
+## GitHub Actions 发布
+
+仓库包含 `.github/workflows/android-release.yml`：
+
+- 推送 `v*` 标签时自动构建 APK 并发布到 GitHub Releases。
+- 也可以在 Actions 页面手动运行，留空 tag 时默认使用 `v<versionName>`。
+- 发布产物命名为 `AIImageBox_<versionName>_debug.apk`。
 
 ## 开发顺序
 

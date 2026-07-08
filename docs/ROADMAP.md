@@ -211,6 +211,16 @@
 - 工作流 ID、名称、摘要、步骤和参考图要求写入任务参数与 attempts 请求数据。
 - 历史复用会恢复已保存的工作流选择，并在参考图文件仍存在时重新载入参考图。
 
+## 0.4.4 模型选择记忆和 GitHub Release 打包
+
+状态：初版已完成。创作页会记住最近选择的渠道/模型，重启或重新进入创作页后优先恢复该选择；新增 GitHub Actions 发布工作流，可自动打包 APK 并上传到 GitHub Releases。
+
+- 最近选择的渠道 ID 和模型名保存到本地 SharedPreferences。
+- 渠道列表重新绑定时优先恢复上次选择；模型被删除时回退到同渠道或首个可用模型。
+- 新增 `.github/workflows/android-release.yml`。
+- 推送 `v*` 标签或手动运行 Actions 时构建 `AIImageBox_<version>_debug.apk`。
+- GitHub Release 会自动附加 APK，并写入 versionName/versionCode。
+
 ## 0.5.0 生视频抽象
 
 目标：支持异步生视频。
@@ -280,7 +290,7 @@
 
 ## 当前下一步
 
-1. 开始 0.4.3 真机接口实测，重点验证 Neribox 浅灰蓝配色、工作流选择/落库/历史复用、预设使用/编辑、参考图、OpenAI-compatible、Gemini、Agnes、Grok 的请求格式和回退 attempts。
+1. 开始 0.4.4 真机和 GitHub Actions 实测，重点验证模型选择记忆、Release APK 产物、Neribox 浅灰蓝配色、工作流选择/落库/历史复用、预设使用/编辑、参考图、OpenAI-compatible、Gemini、Agnes、Grok 的请求格式和回退 attempts。
 2. 扩展跨渠道自动回退：按所有启用渠道和模型顺序展开目标。
 3. 为渠道配置补 API Key 快速校验、更多常见接口预设和模型类型批量修改。
 4. 开始 0.5.0 生视频抽象，先落地 Grok/Seedance 的提交、轮询和下载流程。

@@ -1,0 +1,105 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag, for example v0.4.4. Leave empty to use app version."
+        required: false
+        type: string
+      release_name:
+        description: "Release title. Leave empty to use app version."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-release-apk:
+    name: Build APK and publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare release metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_name="$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -1)"
+          version_code="$(sed -n 's/.*versionCode = \([0-9][0-9]*\).*/\1/p' app/build.gradle.kts | head -1)"
+          apk_name="AIImageBox_${version_name}_debug.apk"
+          cp -f app/build/outputs/apk/debug/app-debug.apk "$apk_name"
+
+          input_tag="${{ github.event.inputs.tag_name }}"
+          input_release_name="${{ github.event.inputs.release_name }}"
+          if [ -n "$input_tag" ]; then
+            tag_name="$input_tag"
+          elif [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            tag_name="${GITHUB_REF_NAME}"
+          else
+            tag_name="v${version_name}"
+          fi
+
+          if [ -n "$input_release_name" ]; then
+            release_name="$input_release_name"
+          else
+            release_name="AI Image Box ${version_name}"
+          fi
+
+          {
+            echo "version_name=$version_name"
+            echo "version_code=$version_code"
+            echo "apk_name=$apk_name"
+            echo "tag_name=$tag_name"
+            echo "release_name=$release_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.apk_name }}
+          path: ${{ steps.meta.outputs.apk_name }}
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.meta.outputs.release_name }}
+          body: |
+            自动构建版本：${{ steps.meta.outputs.version_name }}
+            versionCode：${{ steps.meta.outputs.version_code }}
+
+            产物：`${{ steps.meta.outputs.apk_name }}`
+          files: ${{ steps.meta.outputs.apk_name }}
+          fail_on_unmatched_files: true
+          make_latest: true

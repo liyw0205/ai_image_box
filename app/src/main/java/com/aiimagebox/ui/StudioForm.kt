@@ -34,7 +34,10 @@ class StudioForm @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyleAttr) {
     private val binding = ViewStudioFormBinding.inflate(LayoutInflater.from(context), this, true)
     private val presetStore = context.getSharedPreferences(PREFS_PROMPT_PRESETS, Context.MODE_PRIVATE)
+    private val stateStore = context.getSharedPreferences(PREFS_STUDIO_STATE, Context.MODE_PRIVATE)
     private val targetOptions = mutableListOf<StudioChannelTarget>()
+    private var rememberedChannelId = stateStore.getString(KEY_SELECTED_CHANNEL_ID, "").orEmpty()
+    private var rememberedModel = stateStore.getString(KEY_SELECTED_MODEL, "").orEmpty()
     private var selectedTargetIndex = 0
     private var quantity = DEFAULT_QUANTITY
     private var submitting = false
@@ -72,9 +75,12 @@ class StudioForm @JvmOverloads constructor(
     }
 
     fun bindTargets(targets: List<StudioChannelTarget>) {
+        val currentTarget = selectedTarget()
+        val restoreChannelId = currentTarget?.channelId?.takeIf { it.isNotBlank() } ?: rememberedChannelId
+        val restoreModel = currentTarget?.model?.takeIf { it.isNotBlank() } ?: rememberedModel
         targetOptions.clear()
         targetOptions.addAll(targets)
-        selectedTargetIndex = 0
+        selectedTargetIndex = targetIndexFor(restoreChannelId, restoreModel).takeIf { it >= 0 } ?: 0
         renderSelectedTarget()
         updateSubmitState()
     }
@@ -514,6 +520,16 @@ class StudioForm @JvmOverloads constructor(
         }
     }
 
+    private fun targetIndexFor(channelId: String, model: String): Int {
+        if (channelId.isBlank() && model.isBlank()) return -1
+        val exact = targetOptions.indexOfFirst {
+            it.channelId == channelId && it.model == model
+        }
+        if (exact >= 0) return exact
+        if (channelId.isBlank()) return -1
+        return targetOptions.indexOfFirst { it.channelId == channelId }
+    }
+
     private fun renderSelectedTarget() {
         val target = selectedTarget()
         if (target == null) {
@@ -530,10 +546,20 @@ class StudioForm @JvmOverloads constructor(
         binding.studioChannelEndpoint.visibility = View.VISIBLE
         binding.studioChannelEndpoint.text = "接口：${target.baseUrl.ifBlank { "-" }}"
         binding.studioNextTargetButton.isEnabled = targetOptions.size > 1
+        rememberSelectedTarget(target)
     }
 
     private fun selectedTarget(): StudioChannelTarget? {
         return targetOptions.getOrNull(selectedTargetIndex)
+    }
+
+    private fun rememberSelectedTarget(target: StudioChannelTarget) {
+        rememberedChannelId = target.channelId
+        rememberedModel = target.model
+        stateStore.edit()
+            .putString(KEY_SELECTED_CHANNEL_ID, target.channelId)
+            .putString(KEY_SELECTED_MODEL, target.model)
+            .apply()
     }
 
     private fun setQuantity(nextQuantity: Int) {
@@ -749,7 +775,10 @@ class StudioForm @JvmOverloads constructor(
         private const val DEFAULT_QUANTITY = 1
         private const val DEFAULT_WORKFLOW_KEY = "text_to_image"
         private const val PREFS_PROMPT_PRESETS = "studio_prompt_presets"
+        private const val PREFS_STUDIO_STATE = "studio_state"
         private const val KEY_CUSTOM_PROMPT_PRESETS = "custom_prompt_presets"
+        private const val KEY_SELECTED_CHANNEL_ID = "selected_channel_id"
+        private const val KEY_SELECTED_MODEL = "selected_model"
         private const val TEXT_SUBMIT = "开始生成"
         private const val TEXT_SUBMIT_RUNNING = "提交中"
         private const val TEXT_STATUS_WAITING = "填写提示词并绑定可用渠道后即可提交。"
