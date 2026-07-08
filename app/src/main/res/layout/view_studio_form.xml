@@ -35,14 +35,31 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <TextView
-            android:id="@+id/studioPromptTitle"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/studio_prompt_title"
-            android:textColor="@color/aib_text"
-            android:textSize="17sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/studioPromptTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/studio_prompt_title"
+                android:textColor="@color/aib_text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/studioPromptPresetButton"
+                style="@style/Widget.AIImageBox.Button.Secondary"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:minWidth="84dp"
+                android:text="@string/studio_prompt_preset"
+                android:textSize="14sp" />
+        </LinearLayout>
 
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/studioPromptLayout"

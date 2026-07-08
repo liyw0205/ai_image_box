@@ -2,17 +2,21 @@ package com.aiimagebox.ui
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.text.InputType
 import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import androidx.appcompat.app.AlertDialog
 import androidx.core.widget.doAfterTextChanged
 import com.aiimagebox.R
 import com.aiimagebox.data.ProviderChannel
 import com.aiimagebox.databinding.ViewStudioFormBinding
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.roundToInt
 
@@ -22,6 +26,7 @@ class StudioForm @JvmOverloads constructor(
     defStyleAttr: Int = 0,
 ) : FrameLayout(context, attrs, defStyleAttr) {
     private val binding = ViewStudioFormBinding.inflate(LayoutInflater.from(context), this, true)
+    private val presetStore = context.getSharedPreferences(PREFS_PROMPT_PRESETS, Context.MODE_PRIVATE)
     private val targetOptions = mutableListOf<StudioChannelTarget>()
     private var selectedTargetIndex = 0
     private var quantity = DEFAULT_QUANTITY
@@ -36,6 +41,7 @@ class StudioForm @JvmOverloads constructor(
         binding.studioAspectGroup.check(binding.studioAspectSquare.id)
         binding.studioResolutionGroup.check(binding.studioResolution1024.id)
         binding.studioPromptInput.doAfterTextChanged { updateSubmitState() }
+        binding.studioPromptPresetButton.setOnClickListener { showPromptPresetPicker() }
         binding.studioNextTargetButton.setOnClickListener { showTargetPicker() }
         binding.studioQuantityMinus.setOnClickListener { setQuantity(quantity - 1) }
         binding.studioQuantityPlus.setOnClickListener { setQuantity(quantity + 1) }
@@ -78,6 +84,84 @@ class StudioForm @JvmOverloads constructor(
     fun setPrompt(prompt: CharSequence) {
         binding.studioPromptInput.setText(prompt)
         binding.studioPromptInput.setSelection(binding.studioPromptInput.text?.length ?: 0)
+    }
+
+    private fun showPromptPresetPicker() {
+        val presets = DEFAULT_PROMPT_PRESETS + loadCustomPromptPresets()
+        val labels = presets.map { preset ->
+            val preview = preset.prompt.replace(Regex("\\s+"), " ").take(PRESET_PREVIEW_CHARS)
+            "${preset.title}\n$preview"
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.studio_prompt_preset_title)
+            .setItems(labels) { _, which ->
+                val preset = presets[which]
+                setPrompt(preset.prompt)
+                setStatus(context.getString(R.string.studio_prompt_preset_applied, preset.title))
+            }
+            .setNeutralButton(R.string.action_add_preset) { _, _ -> showAddPromptPresetDialog() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showAddPromptPresetDialog() {
+        val nameInput = dialogEditText(R.string.field_prompt_preset_name, singleLine = true)
+        val promptInput = dialogEditText(R.string.field_prompt_preset_prompt, singleLine = false).apply {
+            minLines = 4
+            setText(binding.studioPromptInput.text?.toString().orEmpty())
+            setSelection(text?.length ?: 0)
+        }
+        val form = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(4), dp(2), dp(4), dp(2))
+            addView(nameInput)
+            addView(promptInput)
+        }
+        val dialog = MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.studio_prompt_preset_add_title)
+            .setView(form)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.action_save, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val title = nameInput.text?.toString()?.trim().orEmpty()
+                val prompt = promptInput.text?.toString()?.trim().orEmpty()
+                if (title.isBlank() || prompt.isBlank()) {
+                    setStatus(context.getString(R.string.studio_prompt_preset_required))
+                    return@setOnClickListener
+                }
+                val preset = PromptPreset(title = title, prompt = prompt)
+                saveCustomPromptPreset(preset)
+                setPrompt(prompt)
+                setStatus(context.getString(R.string.studio_prompt_preset_saved, title))
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun dialogEditText(labelRes: Int, singleLine: Boolean): EditText {
+        return EditText(context).apply {
+            hint = context.getString(labelRes)
+            setTextColor(context.getColor(R.color.aib_text))
+            setHintTextColor(context.getColor(R.color.aib_hint))
+            textSize = 15f
+            setSingleLine(singleLine)
+            maxLines = if (singleLine) 1 else 8
+            inputType = if (singleLine) {
+                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            } else {
+                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            }
+            setPadding(0, dp(8), 0, dp(8))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(8)
+            }
+        }
     }
 
     fun applyDraft(
@@ -415,6 +499,40 @@ class StudioForm @JvmOverloads constructor(
         }
     }
 
+    private fun loadCustomPromptPresets(): List<PromptPreset> {
+        val raw = presetStore.getString(KEY_CUSTOM_PROMPT_PRESETS, "").orEmpty()
+        val array = runCatching { JSONArray(raw) }.getOrNull() ?: return emptyList()
+        val presets = mutableListOf<PromptPreset>()
+        for (index in 0 until array.length()) {
+            val item = array.optJSONObject(index) ?: continue
+            val title = item.optString("title", "").trim()
+            val prompt = item.optString("prompt", "").trim()
+            if (title.isNotBlank() && prompt.isNotBlank()) {
+                presets.add(PromptPreset(title = title, prompt = prompt))
+            }
+        }
+        return presets
+    }
+
+    private fun saveCustomPromptPreset(preset: PromptPreset) {
+        val presets = (loadCustomPromptPresets().filterNot { it.title == preset.title } + preset)
+            .takeLast(MAX_CUSTOM_PROMPT_PRESETS)
+        val array = JSONArray()
+        presets.forEach { item ->
+            array.put(
+                JSONObject()
+                    .put("title", item.title)
+                    .put("prompt", item.prompt),
+            )
+        }
+        presetStore.edit().putString(KEY_CUSTOM_PROMPT_PRESETS, array.toString()).apply()
+    }
+
+    private data class PromptPreset(
+        val title: String,
+        val prompt: String,
+    )
+
     data class StudioChannelTarget(
         val channelId: String,
         val channelName: String,
@@ -444,7 +562,11 @@ class StudioForm @JvmOverloads constructor(
         private const val MIN_QUANTITY = 1
         private const val MAX_QUANTITY = 4
         private const val MAX_GALLERY_ITEMS = 12
+        private const val MAX_CUSTOM_PROMPT_PRESETS = 50
+        private const val PRESET_PREVIEW_CHARS = 48
         private const val DEFAULT_QUANTITY = 1
+        private const val PREFS_PROMPT_PRESETS = "studio_prompt_presets"
+        private const val KEY_CUSTOM_PROMPT_PRESETS = "custom_prompt_presets"
         private const val TEXT_SUBMIT = "开始生成"
         private const val TEXT_SUBMIT_RUNNING = "提交中"
         private const val TEXT_STATUS_WAITING = "填写提示词并绑定可用渠道后即可提交。"
@@ -456,5 +578,27 @@ class StudioForm @JvmOverloads constructor(
         private const val TEXT_CHANNEL_EMPTY_TITLE = "无可用渠道"
         private const val TEXT_CHANNEL_EMPTY_BODY = "请先在渠道页启用至少一个模型。"
         private const val TEXT_CHANNEL_MODEL_UNKNOWN = "未指定模型"
+        private val DEFAULT_PROMPT_PRESETS = listOf(
+            PromptPreset(
+                title = "手办化",
+                prompt = "参考上传图片，将主体改造成精致收藏级手办，保留人物主要特征、发型、服装和姿态，材质为高质量PVC与树脂，带透明底座，棚拍灯光，细节清晰。",
+            ),
+            PromptPreset(
+                title = "真人化",
+                prompt = "参考上传图片，将主体转换为真实人物照片风格，保留原始五官特征、发型、服装和整体气质，自然皮肤质感，真实光影，高清摄影。",
+            ),
+            PromptPreset(
+                title = "变COS",
+                prompt = "参考上传图片，将主体改造成高质量COS写真，保留人物特征，替换为指定角色风格服装与道具，妆造精致，摄影棚灯光，画面清晰。",
+            ),
+            PromptPreset(
+                title = "变真人",
+                prompt = "参考上传图片，将二次元或插画角色转换为真实真人形象，保留角色辨识度、发型、服装配色和气质，写实摄影风格，自然光影。",
+            ),
+            PromptPreset(
+                title = "Q版化",
+                prompt = "参考上传图片，将主体转换为可爱的Q版形象，大头小身比例，保留关键外观特征和服装元素，表情灵动，色彩明快，干净背景。",
+            ),
+        )
     }
 }
