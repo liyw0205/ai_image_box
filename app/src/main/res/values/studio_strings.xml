@@ -6,11 +6,13 @@
     <string name="studio_prompt_preset">预设</string>
     <string name="studio_prompt_preset_title">提示词预设</string>
     <string name="studio_prompt_preset_add_title">新增预设</string>
+    <string name="studio_prompt_preset_edit_title">编辑预设</string>
     <string name="studio_prompt_preset_applied">已应用预设：%1$s</string>
     <string name="studio_prompt_preset_saved">已保存并应用预设：%1$s</string>
     <string name="studio_prompt_preset_required">请填写预设名和提示词。</string>
     <string name="field_prompt_preset_name">预设名</string>
     <string name="field_prompt_preset_prompt">提示词内容</string>
+    <string name="action_use_preset">使用</string>
     <string name="action_add_preset">新增预设</string>
     <string name="studio_prompt_hint">描述你想生成的画面、风格、主体和细节</string>
     <string name="studio_prompt_counter_hint">建议写清主体、构图、光线、材质和禁用元素。</string>

@@ -1,20 +1,27 @@
 package com.aiimagebox.ui
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
+import android.graphics.Typeface
 import android.text.InputType
 import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.core.widget.doAfterTextChanged
 import com.aiimagebox.R
 import com.aiimagebox.data.ProviderChannel
 import com.aiimagebox.databinding.ViewStudioFormBinding
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import org.json.JSONArray
 import org.json.JSONObject
@@ -87,30 +94,127 @@ class StudioForm @JvmOverloads constructor(
     }
 
     private fun showPromptPresetPicker() {
-        val presets = DEFAULT_PROMPT_PRESETS + loadCustomPromptPresets()
-        val labels = presets.map { preset ->
-            val preview = preset.prompt.replace(Regex("\\s+"), " ").take(PRESET_PREVIEW_CHARS)
-            "${preset.title}\n$preview"
-        }.toTypedArray()
-        MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.studio_prompt_preset_title)
-            .setItems(labels) { _, which ->
-                val preset = presets[which]
-                setPrompt(preset.prompt)
-                setStatus(context.getString(R.string.studio_prompt_preset_applied, preset.title))
+        val list = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(2), dp(4), dp(2), dp(4))
+        }
+        val scroll = ScrollView(context).apply {
+            addView(list)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(430),
+            )
+        }
+        lateinit var dialog: AlertDialog
+        fun renderPresets() {
+            list.removeAllViews()
+            allPromptPresets().forEach { preset ->
+                list.addView(
+                    promptPresetCard(
+                        preset = preset,
+                        onUse = {
+                            setPrompt(preset.prompt)
+                            setStatus(context.getString(R.string.studio_prompt_preset_applied, preset.title))
+                            dialog.dismiss()
+                        },
+                        onEdit = {
+                            dialog.dismiss()
+                            showEditPromptPresetDialog(preset)
+                        },
+                    ),
+                )
             }
-            .setNeutralButton(R.string.action_add_preset) { _, _ -> showAddPromptPresetDialog() }
+        }
+        dialog = MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.studio_prompt_preset_title)
+            .setView(scroll)
+            .setNeutralButton(R.string.action_add_preset) { _, _ -> showEditPromptPresetDialog(null) }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+        renderPresets()
+        dialog.show()
     }
 
-    private fun showAddPromptPresetDialog() {
+    private fun promptPresetCard(
+        preset: PromptPreset,
+        onUse: () -> Unit,
+        onEdit: () -> Unit,
+    ): View {
+        val card = MaterialCardView(context).apply {
+            setCardBackgroundColor(context.getColor(R.color.aib_surface))
+            strokeColor = context.getColor(R.color.aib_line)
+            strokeWidth = dp(1)
+            radius = dp(8).toFloat()
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(10)
+            }
+        }
+        val content = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+        }
+        content.addView(TextView(context).apply {
+            text = preset.title
+            setTextColor(context.getColor(R.color.aib_text))
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        content.addView(TextView(context).apply {
+            text = preset.prompt
+            setTextColor(context.getColor(R.color.aib_text_secondary))
+            textSize = 13f
+            maxLines = 4
+            setPadding(0, dp(6), 0, 0)
+        })
+        content.addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(10), 0, 0)
+            addView(presetActionButton(R.string.action_use_preset, primary = true, onUse).apply {
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = dp(8)
+                }
+            })
+            addView(presetActionButton(R.string.action_edit, primary = false, onEdit).apply {
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+        })
+        card.addView(content)
+        return card
+    }
+
+    private fun presetActionButton(textRes: Int, primary: Boolean, onClick: () -> Unit): MaterialButton {
+        return MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = context.getString(textRes)
+            isAllCaps = false
+            minHeight = dp(38)
+            minimumHeight = dp(38)
+            setSingleLine(false)
+            maxLines = 2
+            if (primary) {
+                backgroundTintList = ColorStateList.valueOf(context.getColor(R.color.aib_primary))
+                setTextColor(context.getColor(R.color.aib_on_primary))
+                strokeWidth = 0
+            } else {
+                setTextColor(context.getColor(R.color.aib_text))
+                strokeColor = ColorStateList.valueOf(context.getColor(R.color.aib_line))
+                backgroundTintList = ColorStateList.valueOf(context.getColor(R.color.aib_surface))
+            }
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun showEditPromptPresetDialog(existing: PromptPreset?) {
         val nameInput = dialogEditText(R.string.field_prompt_preset_name, singleLine = true)
         val promptInput = dialogEditText(R.string.field_prompt_preset_prompt, singleLine = false).apply {
             minLines = 4
-            setText(binding.studioPromptInput.text?.toString().orEmpty())
-            setSelection(text?.length ?: 0)
         }
+        nameInput.setText(existing?.title.orEmpty())
+        nameInput.setSelection(nameInput.text?.length ?: 0)
+        promptInput.setText(existing?.prompt ?: binding.studioPromptInput.text?.toString().orEmpty())
+        promptInput.setSelection(promptInput.text?.length ?: 0)
         val form = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(4), dp(2), dp(4), dp(2))
@@ -118,7 +222,7 @@ class StudioForm @JvmOverloads constructor(
             addView(promptInput)
         }
         val dialog = MaterialAlertDialogBuilder(context)
-            .setTitle(R.string.studio_prompt_preset_add_title)
+            .setTitle(if (existing == null) R.string.studio_prompt_preset_add_title else R.string.studio_prompt_preset_edit_title)
             .setView(form)
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(R.string.action_save, null)
@@ -499,6 +603,12 @@ class StudioForm @JvmOverloads constructor(
         }
     }
 
+    private fun allPromptPresets(): List<PromptPreset> {
+        val custom = loadCustomPromptPresets()
+        val customTitles = custom.map { it.title }.toSet()
+        return DEFAULT_PROMPT_PRESETS.filterNot { it.title in customTitles } + custom
+    }
+
     private fun loadCustomPromptPresets(): List<PromptPreset> {
         val raw = presetStore.getString(KEY_CUSTOM_PROMPT_PRESETS, "").orEmpty()
         val array = runCatching { JSONArray(raw) }.getOrNull() ?: return emptyList()
@@ -563,7 +673,6 @@ class StudioForm @JvmOverloads constructor(
         private const val MAX_QUANTITY = 4
         private const val MAX_GALLERY_ITEMS = 12
         private const val MAX_CUSTOM_PROMPT_PRESETS = 50
-        private const val PRESET_PREVIEW_CHARS = 48
         private const val DEFAULT_QUANTITY = 1
         private const val PREFS_PROMPT_PRESETS = "studio_prompt_presets"
         private const val KEY_CUSTOM_PROMPT_PRESETS = "custom_prompt_presets"
