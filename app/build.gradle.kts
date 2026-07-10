@@ -11,8 +11,8 @@ android {
         applicationId = "com.aiimagebox"
         minSdk = 26
         targetSdk = 34
-        versionCode = 18
-        versionName = "0.4.4"
+        versionCode = 21
+        versionName = "0.5.0"
     }
 
     buildTypes {
@@ -47,4 +47,5 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    testImplementation("junit:junit:4.13.2")
 }

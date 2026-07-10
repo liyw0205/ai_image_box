@@ -30,18 +30,20 @@ Android APP 不直接运行 Python，但要保留这些结构。
 
 ## Provider 类型
 
-首版建议支持：
+当前已接入生图类型和通用异步视频类型：
 
 | 类型 | 能力 | 来源 |
 | --- | --- | --- |
-| openai_image | 文生图、图生图 | 参考 OpenAIImageAdapter |
-| gemini_image | 文生图、图生图 | 参考 GeminiImageAdapter |
-| gemini_openai | OpenAI chat completions 兼容图像响应 | 参考 GeminiOpenAIImageAdapter |
-| openai_compatible_image | 任意 `/v1/images/generations` 兼容接口 | 参考 SimpleOpenAIImageAdapter |
-| agnes_image | 文生图、参考图 | 参考 AgnesImageAdapter |
-| grok_image | 文生图 | 参考 GrokImageAdapter |
-| openai_compatible_video | 同步或异步生视频 | 新增 |
-| generic_async_video | 提交 job、轮询、下载结果 | 新增 |
+| openai_compatible_image | 文生图、图生图 | 已接入，含 `/v1/images/generations` 和 `/v1/images/edits` |
+| gemini_image | 文生图、图生图 | 已接入，参考 GeminiImageAdapter |
+| agnes_image | 文生图、参考图 | 已接入，参考 AgnesImageAdapter |
+| grok_image | 文生图 | 已接入，参考 GrokImageAdapter |
+| openai_image | 文生图、图生图 | 可作为 `openai_compatible_image` 别名/模板处理 |
+| gemini_openai | OpenAI chat completions 兼容图像响应 | 未接入，后续按真实接口需求补 |
+| openai_compatible_video | 同步或异步生视频 | 已作为 `generic_async_video` 别名接入 |
+| grok_video | 异步生视频 | 已作为 `generic_async_video` 别名接入，具体路径可用扩展 JSON 覆盖 |
+| seedance_video | 异步生视频 | 已作为 `generic_async_video` 别名接入，具体路径可用扩展 JSON 覆盖 |
+| generic_async_video | 提交 job、轮询、下载结果 | 已接入 |
 
 ## 标准请求模型
 
@@ -70,6 +72,8 @@ enum class GenerationMode {
 首版 UI 可以只显示常用参数，其余写入 `extra`。
 
 ## 标准结果模型
+
+当前代码的 `GenerationResult` 已覆盖图片、视频、job、attempts、HTTP 状态、错误和响应预览：
 
 ```kotlin
 data class GenerationResult(
@@ -137,6 +141,8 @@ Grok：
 
 ## 生视频适配规则
 
+状态：已实现最小闭环。`GenericAsyncVideoAdapter` 支持提交 JSON 请求、从提交响应直接提取视频 URL 或解析 job id、按 poll URL/模板轮询、下载视频到本地缓存，并将 job id、poll URL、HTTP 状态、响应预览和 attempts 写入详情。前台服务常驻轮询和视频缩略图后续补。
+
 生视频接口差异大，首版用通用异步 job 适配。
 
 标准流程：
@@ -174,6 +180,15 @@ data class ProviderCapabilities(
 | seed | seed |
 
 如果 provider 字段无法标准化，写入渠道 `extra.request_template`。
+
+当前通用视频扩展字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `video_submit_path` | 覆盖提交路径，默认 `/v1/videos/generations` |
+| `video_poll_path_template` | 覆盖轮询路径模板，支持 `{job_id}` 或 `{id}` |
+| `video_max_polls` | 最大轮询次数，默认 60 |
+| `video_poll_interval_ms` | 轮询间隔，默认 5000ms |
 
 ## 响应解析策略
 

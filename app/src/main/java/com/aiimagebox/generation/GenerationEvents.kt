@@ -48,6 +48,7 @@ data class GenerationParameters(
     val aspectRatio: String = "",
     val resolution: String? = null,
     val count: Int = 1,
+    val durationSeconds: Int? = null,
     val negativePrompt: String? = null,
     val seed: Long? = null,
     val guidanceScale: Double? = null,

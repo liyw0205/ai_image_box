@@ -196,6 +196,7 @@ abstract class JsonImageAdapter(
                     attempts = listOf(
                         AttemptRecord(
                             providerType = target.providerType,
+                            channelId = target.channelId,
                             channelName = target.channelName,
                             model = model,
                             httpStatus = response.code,
@@ -338,6 +339,7 @@ abstract class JsonImageAdapter(
             attempts = listOf(
                 AttemptRecord(
                     providerType = target.providerType,
+                    channelId = target.channelId,
                     channelName = target.channelName,
                     model = target.model,
                     httpStatus = httpStatus,

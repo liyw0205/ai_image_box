@@ -202,8 +202,9 @@ class OpenAICompatibleImageAdapter(
                     elapsedMillis = elapsed,
                     attempts = listOf(
                         AttemptRecord(
-                            providerType = channel.providerType,
-                            channelName = channel.name,
+                            providerType = target.providerType,
+                            channelId = target.channelId.ifBlank { channel.id },
+                            channelName = target.channelName.ifBlank { channel.name },
                             model = target.model,
                             httpStatus = response.code,
                             elapsedMillis = elapsed,
@@ -371,8 +372,9 @@ class OpenAICompatibleImageAdapter(
             elapsedMillis = elapsed,
             attempts = listOf(
                 AttemptRecord(
-                    providerType = channel.providerType,
-                    channelName = channel.name,
+                    providerType = target.providerType,
+                    channelId = target.channelId.ifBlank { channel.id },
+                    channelName = target.channelName.ifBlank { channel.name },
                     model = target.model,
                     httpStatus = httpStatus,
                     elapsedMillis = elapsed,

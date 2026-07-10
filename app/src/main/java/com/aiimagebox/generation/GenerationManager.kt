@@ -44,6 +44,7 @@ class GenerationProviderException(
 
 class ProviderRegistryGenerationExecutor(
     private val registry: ProviderRegistry = ProviderRegistry,
+    private val channelProvider: () -> List<ProviderChannel> = { emptyList() },
 ) : GenerationExecutor {
     override suspend fun generate(request: GenerationRequest): GenerationResult {
         val channel = request.target.channel
@@ -55,7 +56,9 @@ class ProviderRegistryGenerationExecutor(
         val attempts = mutableListOf<ProviderAttemptRecord>()
         var lastResult: ProviderGenerationResult? = null
 
-        for (providerTarget in request.fallbackTargets(channel)) {
+        for (fallbackTarget in request.fallbackTargetPairs(channel)) {
+            val providerChannel = fallbackTarget.channel
+            val providerTarget = fallbackTarget.target
             val adapter = registry.get(providerTarget.providerType)
             if (adapter == null) {
                 val skipped = localFailure(providerTarget, "Unsupported provider type: ${providerTarget.providerType}")
@@ -63,7 +66,7 @@ class ProviderRegistryGenerationExecutor(
                 lastResult = skipped.copy(attempts = attempts.toList())
                 continue
             }
-            val capabilities = adapter.capabilities(channel)
+            val capabilities = adapter.capabilities(providerChannel)
             if (!providerRequest.mode.isSupportedBy(capabilities)) {
                 val skipped = localFailure(
                     providerTarget,
@@ -74,7 +77,7 @@ class ProviderRegistryGenerationExecutor(
                 continue
             }
 
-            val providerResult = adapter.generate(channel, providerRequest, providerTarget)
+            val providerResult = adapter.generate(providerChannel, providerRequest, providerTarget)
             attempts.addAll(
                 providerResult.attempts.ifEmpty {
                     listOf(providerResult.toAttemptRecord(providerTarget))
@@ -95,8 +98,14 @@ class ProviderRegistryGenerationExecutor(
     }
 
     private fun GenerationRequest.toProviderRequest(): ProviderGenerationRequest {
+        val videoTarget = target.providerType.contains("video", ignoreCase = true) ||
+            parameters.extra["mode"]?.toString()?.contains("video", ignoreCase = true) == true
         return ProviderGenerationRequest(
-            mode = if (parameters.referenceImagePaths.isEmpty()) {
+            mode = if (videoTarget && parameters.referenceImagePaths.isEmpty()) {
+                ProviderGenerationMode.TEXT_TO_VIDEO
+            } else if (videoTarget) {
+                ProviderGenerationMode.IMAGE_TO_VIDEO
+            } else if (parameters.referenceImagePaths.isEmpty()) {
                 ProviderGenerationMode.TEXT_TO_IMAGE
             } else {
                 ProviderGenerationMode.IMAGE_TO_IMAGE
@@ -106,6 +115,7 @@ class ProviderRegistryGenerationExecutor(
             aspectRatio = parameters.aspectRatio.ifBlank { "1:1" },
             resolution = parameters.resolution ?: parameters.size ?: imageResolution(parameters),
             count = parameters.count.coerceIn(1, 10),
+            durationSeconds = parameters.durationSeconds,
             responseFormat = responseFormatConstant(parameters.responseFormat),
             quality = parameters.quality,
             style = parameters.style,
@@ -171,12 +181,28 @@ class ProviderRegistryGenerationExecutor(
         )
     }
 
-    private fun GenerationRequest.fallbackTargets(channel: ProviderChannel): List<ModelTarget> {
-        val selected = target.toModelTarget(channel)
-        val configured = registry.targetsFor(listOf(channel))
-        return (listOf(selected) + configured)
-            .filter { it.model.isNotBlank() }
-            .distinctBy { "${it.channelId}\u0000${it.providerType}\u0000${it.model}" }
+    private fun GenerationRequest.fallbackTargetPairs(channel: ProviderChannel): List<FallbackTarget> {
+        val loadedChannels = runCatching { channelProvider() }
+            .getOrDefault(emptyList())
+            .filter { it.enabled }
+        val loadedById = loadedChannels.associateBy { it.id }
+        val selectedChannel = channel
+        val currentChannelForConfiguredTargets = loadedById[selectedChannel.id] ?: selectedChannel
+        val channelById = (loadedChannels + selectedChannel + currentChannelForConfiguredTargets)
+            .associateBy { it.id }
+
+        val selected = target.toModelTarget(selectedChannel)
+        val targets = mutableListOf(FallbackTarget(selectedChannel, selected))
+        targets += registry.targetsFor(listOf(currentChannelForConfiguredTargets))
+            .map { FallbackTarget(channelById[it.channelId] ?: currentChannelForConfiguredTargets, it) }
+        targets += registry.targetsFor(loadedChannels)
+            .mapNotNull { configuredTarget ->
+                channelById[configuredTarget.channelId]?.let { FallbackTarget(it, configuredTarget) }
+            }
+
+        return targets
+            .filter { it.target.model.isNotBlank() }
+            .distinctBy { "${it.target.channelId}\u0000${it.target.providerType}\u0000${it.target.model}" }
     }
 
     private fun ProviderGenerationMode.isSupportedBy(capabilities: ProviderCapabilities): Boolean {
@@ -196,6 +222,7 @@ class ProviderRegistryGenerationExecutor(
             attempts = listOf(
                 ProviderAttemptRecord(
                     providerType = target.providerType,
+                    channelId = target.channelId,
                     channelName = target.channelName,
                     model = target.model,
                     error = error,
@@ -207,6 +234,7 @@ class ProviderRegistryGenerationExecutor(
     private fun ProviderGenerationResult.toAttemptRecord(target: ModelTarget): ProviderAttemptRecord {
         return ProviderAttemptRecord(
             providerType = target.providerType,
+            channelId = target.channelId,
             channelName = target.channelName,
             model = usedModel.ifBlank { target.model },
             httpStatus = httpStatus,
@@ -221,8 +249,8 @@ class ProviderRegistryGenerationExecutor(
         if (status != ProviderGenerationStatus.SUCCEEDED) {
             throw GenerationProviderException(this)
         }
-        if (images.isEmpty()) {
-            throw GenerationProviderException(this, "Provider result did not include image assets.")
+        if (images.isEmpty() && videos.isEmpty()) {
+            throw GenerationProviderException(this, "Provider result did not include image or video assets.")
         }
 
         val metadata = buildMap {
@@ -233,7 +261,10 @@ class ProviderRegistryGenerationExecutor(
             put("elapsed_ms", elapsedMillis.toString())
             rawPreview.takeIf { it.isNotBlank() }?.let { put("raw_preview", it) }
             put("image_count", images.size.toString())
+            put("video_count", videos.size.toString())
             put("attempt_count", attempts.size.toString())
+            job?.id?.takeIf { it.isNotBlank() }?.let { put("job_id", it) }
+            job?.pollUrl?.takeIf { it.isNotBlank() }?.let { put("poll_url", it) }
             if (attempts.isNotEmpty()) put("attempts", attempts.toJson().toString())
         }
         val assets = images.mapIndexed { index, asset ->
@@ -247,6 +278,19 @@ class ProviderRegistryGenerationExecutor(
                     put("source", asset.source.name.lowercase())
                     asset.remoteUrl.takeIf { it.isNotBlank() }?.let { put("remote_url", it) }
                     asset.revisedPrompt.takeIf { it.isNotBlank() }?.let { put("revised_prompt", it) }
+                },
+            )
+        } + videos.mapIndexed { index, asset ->
+            GenerationAsset(
+                bytes = asset.bytes,
+                mimeType = asset.mimeType.ifBlank { "video/mp4" },
+                fileNameHint = "video_${index + 1}",
+                metadata = buildMap {
+                    putAll(metadata)
+                    put("media_type", "video")
+                    put("video_index", (index + 1).toString())
+                    put("source", asset.source.name.lowercase())
+                    asset.remoteUrl.takeIf { it.isNotBlank() }?.let { put("remote_url", it) }
                 },
             )
         }
@@ -263,6 +307,7 @@ class ProviderRegistryGenerationExecutor(
             array.put(
                 JSONObject()
                     .put("attempt_number", index + 1)
+                    .put("channel_id", attempt.channelId)
                     .put("provider_type", attempt.providerType)
                     .put("channel_name", attempt.channelName)
                     .put("model", attempt.model)
@@ -280,7 +325,7 @@ class ProviderRegistryGenerationExecutor(
     private fun ProviderAttemptRecord.toSummary(request: GenerationRequest): GenerationAttemptSummary {
         return GenerationAttemptSummary(
             status = if (isSuccessful()) GenerationStatus.SUCCEEDED else GenerationStatus.FAILED,
-            channelId = request.target.channelId,
+            channelId = channelId.ifBlank { request.target.channelId },
             channelName = channelName.ifBlank { request.target.channelName },
             providerType = providerType.ifBlank { request.target.providerType },
             model = model.ifBlank { request.target.model },
@@ -299,6 +344,11 @@ class ProviderRegistryGenerationExecutor(
     private fun ProviderAttemptRecord.isSuccessful(): Boolean {
         return error.isBlank() && (httpStatus == null || httpStatus in 200..299)
     }
+
+    private data class FallbackTarget(
+        val channel: ProviderChannel,
+        val target: ModelTarget,
+    )
 }
 
 class GenerationManager(

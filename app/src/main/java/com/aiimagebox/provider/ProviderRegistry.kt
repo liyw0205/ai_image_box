@@ -10,6 +10,7 @@ object ProviderRegistry {
         register(GeminiImageAdapter())
         register(GrokImageAdapter())
         register(AgnesImageAdapter())
+        register(GenericAsyncVideoAdapter())
     }
 
     fun get(type: String): ProviderAdapter? = adaptersByType[type.normalizedType()]

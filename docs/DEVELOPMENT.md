@@ -2,7 +2,7 @@
 
 ## 当前仓库状态
 
-`https://github.com/liyw0205/ai_image_box` 已进入 Android 原生工程开发。0.4.4 自动发布和创作状态记忆已经完成，包含创作页渠道/模型选择记忆、GitHub Actions 打包 APK 并发布到 Releases、参考 Neribox UI 的浅灰蓝配色、MediaVault 式工作流选择、工作流参数落库和详情复用、卡片式提示词预设、预设使用/编辑、OpenAI-compatible、Gemini、Agnes、Grok 图像适配器、同渠道模型失败自动回退、attempts 记录、自定义预设、创作表单模型选择弹窗、可选参考图、多图预览、公共目录导出、任务队列取消/重试/清理、重启恢复、请求/响应详情、常见 provider 错误中文化、历史缩略图、参数复用、多图结果落盘、基础渠道管理、扩展 JSON 可视化/JSON 切换、已配置模型类型可视化编辑、上游模型拉取/筛选/保存、模型类型推断与手动修改、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
+`https://github.com/liyw0205/ai_image_box` 已进入 Android 原生工程开发。0.5.0 生视频最小闭环已经完成，包含通用异步视频 adapter、模型类型自动切换文生视频/图生视频、submit/poll/download、视频结果落盘、公共 Movies 导出、视频 job/轮询详情记录、接口模板、API Key/Base URL 快速校验、模型类型批量修改、创作页渠道/模型选择记忆、GitHub Actions 打包 APK 并发布到 Releases、参考 Neribox UI 的浅灰蓝配色、参考图参数落库和详情复用、卡片式提示词预设、预设使用/编辑、OpenAI-compatible、Gemini、Agnes、Grok 图像适配器、跨渠道/同渠道失败自动回退、attempts 记录、自定义预设、创作表单模型选择弹窗、可选参考图、多图预览、公共目录导出、任务队列取消/重试/清理、重启恢复、请求/响应详情、常见 provider 错误中文化、历史缩略图、参数复用、多图结果落盘、基础渠道管理、扩展 JSON 可视化/JSON 切换、已配置模型类型可视化编辑、上游模型拉取/筛选/保存、模型类型推断与手动修改、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
 
 ```text
 /data/data/com.termux/files/home/devwork/ai_image_box
@@ -11,7 +11,7 @@
 构建产物：
 
 ```text
-/data/data/com.termux/files/home/devwork/AIImageBox_0.4.4_debug.apk
+/data/data/com.termux/files/home/devwork/AIImageBox_0.5.0_debug.apk
 ```
 
 ## 技术基线
@@ -29,7 +29,7 @@
 | 并发 | Kotlin Coroutines |
 | 网络 | OkHttp |
 | 本地文件 | 应用私有目录 + SAF 导出 |
-| 任务后台 | ForegroundService, 后续可补 WorkManager |
+| 任务后台 | 当前生图和生视频队列在进程内执行；后续补 ForegroundService 常驻轮询，可再补 WorkManager |
 
 建议包名：
 
@@ -53,40 +53,36 @@ implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
 视频缩略图或预览播放可以后置引入 Media3。首版不急着加播放器内核。
 
-## 工程目录建议
+## 当前工程目录
 
 ```text
 app/src/main/java/com/aiimagebox/
   AIImageBoxApp.kt
+  MainActivity.kt
   data/
+    AppDirectories.kt
     ChannelModels.kt
-    TaskModels.kt
-    AppSettings.kt
-    LocalStores.kt
+    GenerationModels.kt
+    ChannelStore.kt
+    GenerationStore.kt
     SecureKeyStore.kt
   provider/
     ProviderAdapter.kt
     ProviderRegistry.kt
-    ImageAdapters.kt
-    VideoAdapters.kt
+    OpenAICompatibleImageAdapter.kt
+    JsonImageAdapters.kt
+    GenericAsyncVideoAdapter.kt
     ResponseParser.kt
+    ProviderErrorLocalizer.kt
   generation/
     GenerationManager.kt
     GenerationQueue.kt
-    GenerationForegroundService.kt
-    AgentPipeline.kt
   ui/
-    MainActivity.kt
-    StudioFragment.kt
-    TasksFragment.kt
-    HistoryFragment.kt
-    ChannelsFragment.kt
-    SettingsDrawerBinder.kt
+    StudioForm.kt
   util/
-    JsonExt.kt
-    FileNames.kt
+    JsonFiles.kt
+    PublicMediaExporter.kt
     Redaction.kt
-    MimeDetect.kt
 ```
 
 ## 模块职责
@@ -94,10 +90,10 @@ app/src/main/java/com/aiimagebox/
 | 模块 | 职责 |
 | --- | --- |
 | data | 配置、任务、记录、素材索引、加密密钥存取 |
-| provider | 不同生图/生视频接口的请求构造、响应解析和下载 |
-| generation | 队列、并发、重试回退、子代理流水线、前台服务 |
-| ui | 创作、任务、历史、渠道管理、设置和数据页 |
-| util | 脱敏、MIME、文件名、JSON、错误展示 |
+| provider | OpenAI-compatible、Gemini、Agnes、Grok 生图请求构造、响应解析和下载；通用异步视频 submit/poll/download |
+| generation | 队列、取消、重试、恢复、同/跨渠道回退、视频模式路由和 attempts 汇总；前台轮询服务未接入 |
+| ui | `MainActivity` 承载创作、任务、历史、渠道管理；`StudioForm` 承载创作表单 |
+| util | 脱敏、JSON 文件、公共图片目录导出 |
 
 ## 数据存储
 
@@ -144,7 +140,7 @@ API Key 不明文写进可导出的 JSON：
 interface ProviderAdapter {
     val type: String
     suspend fun listModels(channel: ProviderChannel): ModelListResult
-    suspend fun generate(request: GenerationRequest, target: ModelTarget): GenerationResult
+    suspend fun generate(channel: ProviderChannel, request: GenerationRequest, target: ModelTarget): GenerationResult
     suspend fun poll(job: ProviderJob, target: ModelTarget): GenerationResult
     fun capabilities(channel: ProviderChannel): ProviderCapabilities
 }
@@ -184,7 +180,7 @@ PromptInput
 - 单文件下载上限：默认 100 MB，可配置。
 - 自动回退：按模型优先级轮询 provider。
 - 失败策略：保留最后错误和每次尝试摘要。
-- 视频异步任务：提交成功后进入 `Polling`，轮询间隔指数退避，用户可取消。
+- 视频异步任务：已接入进程内 submit/poll/download 最小闭环，轮询间隔和最大轮询次数可通过渠道扩展 JSON 配置；前台服务常驻轮询后续补。
 
 注意：这些是稳定性保护，不是 token 或额度限制。
 
@@ -195,13 +191,13 @@ PromptInput
 - 一个 APK，一套业务。
 - 竖屏：底部导航。
 - 横屏或大屏：左侧 NavigationRail，内容区两栏或三栏。
-- 设置、数据、子代理管理从右侧抽屉进入，不新增过多底栏 Tab。
-- 深色工作台风格，重点是密集但清晰的任务和结果管理。
+- 设置、数据、子代理管理后续从右侧抽屉进入，不新增过多底栏 Tab。
+- 当前采用 Neribox 浅灰蓝风格：浅灰页面底、白色面板、灰色分隔线、蓝色主操作，重点是密集但清晰的任务和结果管理。
 
 首屏直接是“创作”工作台：
 
-- 顶部：模式切换、provider/model 选择、参数摘要。
-- 中部：提示词、参考图、比例、分辨率、数量、时长。
+- 顶部：provider/model 选择和参数摘要；当前模式由是否选择参考图自动映射为文生图/图生图。
+- 中部：提示词、预设、参考图、比例、分辨率、数量；视频时长等细分参数后续补独立控件或扩展参数入口。
 - 底部：提交按钮、最近结果、当前任务进度。
 
 ## 构建脚本建议

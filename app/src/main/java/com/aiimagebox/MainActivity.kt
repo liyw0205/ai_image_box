@@ -47,6 +47,7 @@ import com.aiimagebox.generation.GenerationQueueItem
 import com.aiimagebox.generation.GenerationRequest
 import com.aiimagebox.generation.GenerationStatus as QueueGenerationStatus
 import com.aiimagebox.generation.GenerationTarget
+import com.aiimagebox.generation.ProviderRegistryGenerationExecutor
 import com.aiimagebox.provider.ModelListResult
 import com.aiimagebox.provider.ProviderRegistry
 import com.aiimagebox.ui.StudioForm
@@ -85,7 +86,9 @@ class MainActivity : AppCompatActivity() {
         appDirectories = (application as AIImageBoxApp).appDirectories
         channelStore = ChannelStore(appDirectories)
         generationStore = GenerationStore(appDirectories)
-        generationManager = GenerationManager()
+        generationManager = GenerationManager(
+            executor = ProviderRegistryGenerationExecutor(channelProvider = { channelStore.load() }),
+        )
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -202,7 +205,6 @@ class MainActivity : AppCompatActivity() {
             target = GenerationTarget.fromChannel(channel, request.model)
                 .copy(
                     providerType = request.providerType.ifBlank { channel.providerType },
-                    extra = request.workflowExtra(),
                 ),
             parameters = GenerationParameters(
                 aspectRatio = request.aspectRatio,
@@ -221,21 +223,16 @@ class MainActivity : AppCompatActivity() {
         generationManager.enqueue(generationRequest)
     }
 
-    private fun StudioForm.StudioSubmitRequest.workflowExtra(): Map<String, Any?> {
-        return mapOf(
-            KEY_WORKFLOW_ID to workflowId.ifBlank { "text_to_image" },
-            KEY_WORKFLOW_LABEL to workflowLabel,
-            KEY_WORKFLOW_SUMMARY to workflowSummary,
-            KEY_WORKFLOW_STEPS to workflowSteps,
-            KEY_WORKFLOW_REQUIRES_REFERENCE to workflowRequiresReference,
-        )
-    }
-
     private fun createStoredTask(request: GenerationRequest): GenerationTask {
+        val storedMode = if (isVideoProviderType(request.target.providerType)) {
+            StoredGenerationMode.VIDEO
+        } else {
+            StoredGenerationMode.IMAGE
+        }
         return generationStore.createTask(
             GenerationTask(
                 id = request.id,
-                mode = StoredGenerationMode.IMAGE,
+                mode = storedMode,
                 status = StoredGenerationStatus.QUEUED,
                 prompt = request.prompt,
                 channelId = request.target.channelId,
@@ -246,60 +243,11 @@ class MainActivity : AppCompatActivity() {
                     .put("aspect_ratio", request.parameters.aspectRatio.ifBlank { "1:1" })
                     .put("resolution", request.parameters.resolution ?: request.parameters.size ?: "1024x1024")
                     .put("count", request.parameters.count)
+                    .put("duration_seconds", request.parameters.durationSeconds ?: JSONObject.NULL)
                     .put("reference_images", JSONArray(request.parameters.referenceImagePaths))
-                    .putWorkflow(request.target)
                     .toString(),
             ),
         )
-    }
-
-    private fun JSONObject.putWorkflow(target: GenerationTarget): JSONObject {
-        put(KEY_WORKFLOW_ID, target.workflowValue(KEY_WORKFLOW_ID).ifBlank { "text_to_image" })
-        put(KEY_WORKFLOW_LABEL, target.workflowValue(KEY_WORKFLOW_LABEL))
-        put(KEY_WORKFLOW_SUMMARY, target.workflowValue(KEY_WORKFLOW_SUMMARY))
-        put(KEY_WORKFLOW_STEPS, JSONArray(target.workflowSteps()))
-        put(KEY_WORKFLOW_REQUIRES_REFERENCE, target.workflowBoolean(KEY_WORKFLOW_REQUIRES_REFERENCE))
-        return this
-    }
-
-    private fun workflowExtraFromParameters(parameters: JSONObject): Map<String, Any?> {
-        val workflowId = parameters.optString(KEY_WORKFLOW_ID, "").trim()
-        if (workflowId.isBlank()) return emptyMap()
-        return mapOf(
-            KEY_WORKFLOW_ID to workflowId,
-            KEY_WORKFLOW_LABEL to parameters.optString(KEY_WORKFLOW_LABEL, ""),
-            KEY_WORKFLOW_SUMMARY to parameters.optString(KEY_WORKFLOW_SUMMARY, ""),
-            KEY_WORKFLOW_STEPS to parameters.optJSONArray(KEY_WORKFLOW_STEPS).toStringList(),
-            KEY_WORKFLOW_REQUIRES_REFERENCE to parameters.optBoolean(KEY_WORKFLOW_REQUIRES_REFERENCE, false),
-        )
-    }
-
-    private fun GenerationTarget.workflowValue(key: String): String = (extra[key] as? String).orEmpty()
-
-    private fun GenerationTarget.workflowBoolean(key: String): Boolean = when (val value = extra[key]) {
-        is Boolean -> value
-        is String -> value.equals("true", ignoreCase = true)
-        else -> false
-    }
-
-    private fun GenerationTarget.workflowSteps(): List<String> {
-        return when (val value = extra[KEY_WORKFLOW_STEPS]) {
-            is JSONArray -> value.toStringList()
-            is Iterable<*> -> value.mapNotNull { it?.toString()?.trim()?.takeIf { text -> text.isNotBlank() } }
-            is Array<*> -> value.mapNotNull { it?.toString()?.trim()?.takeIf { text -> text.isNotBlank() } }
-            is String -> value.split("->", ",", "\n").map { it.trim() }.filter { it.isNotBlank() }
-            else -> emptyList()
-        }
-    }
-
-    private fun JSONArray?.toStringList(): List<String> {
-        if (this == null) return emptyList()
-        val values = mutableListOf<String>()
-        for (index in 0 until length()) {
-            val value = optString(index, "").trim()
-            if (value.isNotBlank()) values.add(value)
-        }
-        return values
     }
 
     private fun restorePendingTasks() {
@@ -352,12 +300,12 @@ class MainActivity : AppCompatActivity() {
             target = GenerationTarget.fromChannel(channel, model.ifBlank { channel.defaultModel })
                 .copy(
                     providerType = providerType.ifBlank { channel.providerType },
-                    extra = workflowExtraFromParameters(parameters),
                 ),
             parameters = GenerationParameters(
                 aspectRatio = parameters.optString("aspect_ratio", "1:1"),
                 resolution = parameters.optString("resolution", "1024x1024"),
                 count = parameters.optInt("count", 1).coerceIn(1, 10),
+                durationSeconds = parameters.optInt("duration_seconds", 0).takeIf { it > 0 },
                 responseFormat = "b64_json",
                 referenceImagePaths = references,
             ),
@@ -450,14 +398,23 @@ class MainActivity : AppCompatActivity() {
         val request = event.item.request
         val result = event.result
         val savedAt = System.currentTimeMillis()
+        val finalAttempt = result.attempts.lastOrNull { it.status == QueueGenerationStatus.SUCCEEDED }
+            ?: result.attempts.lastOrNull()
+        val resultChannelId = finalAttempt?.channelId?.ifBlank { request.target.channelId } ?: request.target.channelId
+        val resultChannelName = finalAttempt?.channelName?.ifBlank { request.target.channelName } ?: request.target.channelName
+        val resultProviderType = finalAttempt?.providerType?.ifBlank { request.target.providerType } ?: request.target.providerType
+        val resultModel = finalAttempt?.model?.ifBlank { request.target.model } ?: request.target.model
         val assets = result.assets.mapIndexed { index, generatedAsset ->
+            val videoAsset = isVideoMime(generatedAsset.mimeType) || generatedAsset.metadata["media_type"] == "video"
             val ext = extensionForMime(generatedAsset.mimeType)
             val suffix = if (result.assets.size > 1) "_${index + 1}" else ""
-            val file = File(appDirectories.generatedImages, "image_${savedAt}_${request.id.take(8)}$suffix.$ext")
+            val filePrefix = if (videoAsset) "video" else "image"
+            val targetDir = if (videoAsset) appDirectories.generatedVideos else appDirectories.generatedImages
+            val file = File(targetDir, "${filePrefix}_${savedAt}_${request.id.take(8)}$suffix.$ext")
             file.writeBytes(generatedAsset.bytes)
-            val dimensions = imageDimensions(file)
+            val dimensions = if (videoAsset) null to null else imageDimensions(file)
             StoredGeneratedAsset(
-                mode = StoredGenerationMode.IMAGE,
+                mode = if (videoAsset) StoredGenerationMode.VIDEO else StoredGenerationMode.IMAGE,
                 media = StoredMediaReference(
                     filePath = file.absolutePath,
                     mimeType = generatedAsset.mimeType,
@@ -466,16 +423,20 @@ class MainActivity : AppCompatActivity() {
                     width = dimensions.first,
                     height = dimensions.second,
                 ),
-                channelId = request.target.channelId,
-                channelName = request.target.channelName,
-                providerType = request.target.providerType,
-                model = request.target.model,
+                channelId = resultChannelId,
+                channelName = resultChannelName,
+                providerType = resultProviderType,
+                model = resultModel,
                 metadataJson = JSONObject(generatedAsset.metadata.ifEmpty { result.metadata }).toString(),
             )
         }
         val updated = generationStore.updateTask(request.id) {
             it.copy(
                 status = StoredGenerationStatus.SUCCEEDED,
+                channelId = resultChannelId,
+                channelName = resultChannelName,
+                providerType = resultProviderType,
+                model = resultModel,
                 assets = it.assets + assets,
                 attempts = it.attempts + storedAttempts(event, StoredGenerationStatus.SUCCEEDED, ""),
                 errorMessage = "",
@@ -502,7 +463,7 @@ class MainActivity : AppCompatActivity() {
                         } else {
                             QueueGenerationStatus.FAILED
                         },
-                        channelId = event.item.request.target.channelId,
+                        channelId = attempt.channelId.ifBlank { event.item.request.target.channelId },
                         channelName = attempt.channelName.ifBlank { event.item.request.target.channelName },
                         providerType = attempt.providerType.ifBlank { event.item.request.target.providerType },
                         model = attempt.model.ifBlank { event.item.request.target.model },
@@ -546,19 +507,21 @@ class MainActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val providerError = (event as? GenerationEvent.Failed)?.error as? GenerationProviderException
         val successResult = (event as? GenerationEvent.Succeeded)?.result
-        val attemptProviderType = summary?.providerType ?: item.request.target.providerType
-        val attemptChannelName = summary?.channelName ?: item.request.target.channelName
-        val attemptModel = summary?.model ?: item.request.target.model
+        val attemptChannelId = summary?.channelId?.ifBlank { item.request.target.channelId } ?: item.request.target.channelId
+        val attemptProviderType = summary?.providerType?.ifBlank { item.request.target.providerType } ?: item.request.target.providerType
+        val attemptChannelName = summary?.channelName?.ifBlank { item.request.target.channelName } ?: item.request.target.channelName
+        val attemptModel = summary?.model?.ifBlank { item.request.target.model } ?: item.request.target.model
         val requestJson = JSONObject()
             .put("prompt", item.request.prompt)
-            .put("channel_id", item.request.target.channelId)
+            .put("channel_id", attemptChannelId)
+            .put("channel_name", attemptChannelName)
             .put("provider_type", attemptProviderType)
             .put("model", attemptModel)
             .put("aspect_ratio", item.request.parameters.aspectRatio)
             .put("resolution", item.request.parameters.resolution ?: item.request.parameters.size.orEmpty())
             .put("count", item.request.parameters.count)
+            .put("duration_seconds", item.request.parameters.durationSeconds ?: JSONObject.NULL)
             .put("reference_images", JSONArray(item.request.parameters.referenceImagePaths))
-            .putWorkflow(item.request.target)
             .toString()
         val responseJson = summary?.let { attempt ->
             JSONObject()
@@ -586,6 +549,9 @@ class MainActivity : AppCompatActivity() {
                 .put("elapsed_ms", metadata["elapsed_ms"]?.toLongOrNull() ?: JSONObject.NULL)
                 .put("raw_preview", metadata["raw_preview"].orEmpty())
                 .put("image_count", metadata["image_count"].orEmpty())
+                .put("video_count", metadata["video_count"].orEmpty())
+                .put("job_id", metadata["job_id"].orEmpty())
+                .put("poll_url", metadata["poll_url"].orEmpty())
                 .toString()
         } ?: "{}"
         val successHttpStatus = successResult?.metadata?.get("http_status")?.toIntOrNull()
@@ -594,7 +560,7 @@ class MainActivity : AppCompatActivity() {
             taskId = item.request.id,
             attemptNumber = attemptNumber,
             status = status,
-            channelId = item.request.target.channelId,
+            channelId = attemptChannelId,
             channelName = attemptChannelName,
             providerType = attemptProviderType,
             model = attemptModel,
@@ -637,7 +603,28 @@ class MainActivity : AppCompatActivity() {
             "image/jpeg", "image/jpg" -> "jpg"
             "image/webp" -> "webp"
             "image/gif" -> "gif"
-            else -> "png"
+            "video/mp4" -> "mp4"
+            "video/webm" -> "webm"
+            "video/quicktime" -> "mov"
+            "application/vnd.apple.mpegurl" -> "m3u8"
+            "video/avi", "video/x-msvideo" -> "avi"
+            else -> if (mimeType.startsWith("video/", ignoreCase = true)) "mp4" else "png"
+        }
+    }
+
+    private fun isVideoMime(mimeType: String): Boolean {
+        val clean = mimeType.lowercase().substringBefore(';')
+        return clean.startsWith("video/") || clean == "application/vnd.apple.mpegurl"
+    }
+
+    private fun isVideoProviderType(providerType: String): Boolean {
+        return providerType.contains("video", ignoreCase = true)
+    }
+
+    private fun isVideoPath(path: String): Boolean {
+        return when (File(path).extension.lowercase()) {
+            "mp4", "webm", "mov", "m4v", "avi", "m3u8" -> true
+            else -> false
         }
     }
 
@@ -710,12 +697,22 @@ class MainActivity : AppCompatActivity() {
             val exported = withContext(Dispatchers.IO) {
                 files.mapNotNull { file ->
                     runCatching {
-                        PublicMediaExporter.exportImage(
-                            context = this@MainActivity,
-                            source = file,
-                            displayName = file.name,
-                            mimeType = mimeTypeForFile(file),
-                        )
+                        val mimeType = mimeTypeForFile(file)
+                        if (isVideoMime(mimeType) || isVideoPath(file.absolutePath)) {
+                            PublicMediaExporter.exportVideo(
+                                context = this@MainActivity,
+                                source = file,
+                                displayName = file.name,
+                                mimeType = mimeType,
+                            )
+                        } else {
+                            PublicMediaExporter.exportImage(
+                                context = this@MainActivity,
+                                source = file,
+                                displayName = file.name,
+                                mimeType = mimeType,
+                            )
+                        }
                     }.getOrNull()
                 }
             }
@@ -748,6 +745,11 @@ class MainActivity : AppCompatActivity() {
             "jpg", "jpeg" -> "image/jpeg"
             "webp" -> "image/webp"
             "gif" -> "image/gif"
+            "mp4", "m4v" -> "video/mp4"
+            "webm" -> "video/webm"
+            "mov" -> "video/quicktime"
+            "avi" -> "video/avi"
+            "m3u8" -> "application/vnd.apple.mpegurl"
             else -> "image/png"
         }
     }
@@ -959,7 +961,6 @@ class MainActivity : AppCompatActivity() {
             aspectRatio = parameters.optString("aspect_ratio", "1:1"),
             resolution = parameters.optString("resolution", "1024"),
             quantity = parameters.optInt("count", 1).coerceIn(1, 4),
-            workflowKey = parameters.optString(KEY_WORKFLOW_ID, ""),
             draftReferenceImagePath = parameters.optJSONArray("reference_images")?.optString(0, "").orEmpty(),
         )
         binding.studioForm.setStatus(getString(R.string.history_reuse_applied, record.taskId.take(8)))
@@ -1399,6 +1400,12 @@ class MainActivity : AppCompatActivity() {
                 selected.removeAll(filteredModels().take(MAX_VISIBLE_MODELS).toSet())
                 renderModels()
             })
+            addView(dialogButton(R.string.action_batch_model_type) {
+                val visibleModels = filteredModels().take(MAX_VISIBLE_MODELS)
+                showBatchModelTypeDialog(visibleModels, selectedTypes) {
+                    renderModels()
+                }
+            })
         }
         filter.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -1535,6 +1542,34 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun showBatchModelTypeDialog(
+        models: List<String>,
+        selectedTypes: MutableMap<String, String>,
+        onChanged: () -> Unit,
+    ) {
+        val cleanModels = models.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (cleanModels.isEmpty()) {
+            Toast.makeText(this, R.string.channel_model_filter_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val types = modelInterfaceTypeOptions()
+        val labels = types.map { it.label }.toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.channel_batch_model_type_title)
+            .setMessage(getString(R.string.channel_batch_model_type_message, cleanModels.size))
+            .setSingleChoiceItems(labels, -1) { dialog, which ->
+                cleanModels.forEach { model -> selectedTypes[model] = types[which].key }
+                dialog.dismiss()
+                onChanged()
+            }
+            .setNeutralButton(R.string.action_use_inferred_type) { _, _ ->
+                cleanModels.forEach { model -> selectedTypes.remove(model) }
+                onChanged()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
     private fun modelTypeOverrides(extraJson: String): Map<String, String> {
         val modelTypes = runCatching {
             JSONObject(extraJson.ifBlank { "{}" }).optJSONObject("model_types")
@@ -1604,17 +1639,38 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, dp(8), 0, dp(8))
         }
         val extraVisualEditor = extraModelTypeVisualEditor(extra, enabledModels)
+        val templateRow = channelTemplateRow(name, baseUrl, enabledModels, extra, extraVisualEditor.refresh)
         val extraMode = extraModeRow(extraVisualEditor.view, extra, extraVisualEditor.refresh)
+        val validateRow = dialogButtonGrid(
+            listOf(
+                UiAction(R.string.action_validate_channel) {
+                    validateChannelDraft(
+                        existing = existing,
+                        name = name.text.toString(),
+                        baseUrl = baseUrl.text.toString(),
+                        apiKey = apiKey.text.toString(),
+                        enabledModels = enabledModels.text.toString(),
+                        timeout = timeout.text.toString(),
+                        proxy = proxy.text.toString(),
+                        extra = extra.text.toString(),
+                        enabled = enabled.isChecked,
+                    )
+                },
+            ),
+            columns = 1,
+        )
 
         val form = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(4), dp(2), dp(4), dp(2))
             addView(name)
+            addView(templateRow)
             addView(baseUrl)
             addView(apiKey)
             addView(enabledModels)
             addView(timeout)
             addView(proxy)
+            addView(validateRow)
             addView(extraMode)
             addView(extraVisualEditor.view)
             addView(extra)
@@ -1644,6 +1700,98 @@ class MainActivity : AppCompatActivity() {
             }
         }
         dialog.show()
+    }
+
+    private fun channelTemplateRow(
+        name: EditText,
+        baseUrl: EditText,
+        enabledModels: EditText,
+        extra: EditText,
+        refreshVisual: () -> Unit,
+    ): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, dp(8))
+            addView(TextView(this@MainActivity).apply {
+                text = getString(R.string.field_channel_templates)
+                setTextColor(color(R.color.aib_text))
+                textSize = 15f
+                typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, 0, 0, dp(6))
+            })
+            addView(dialogButtonGrid(
+                channelTemplates().map { template ->
+                    UiAction(template.labelRes) {
+                        applyChannelTemplate(template, name, baseUrl, enabledModels, extra, refreshVisual)
+                    }
+                },
+                columns = 3,
+            ))
+        }
+    }
+
+    private fun channelTemplates(): List<ChannelTemplate> {
+        return listOf(
+            ChannelTemplate(
+                labelRes = R.string.channel_template_openai,
+                name = "OpenAI",
+                baseUrl = "https://api.openai.com",
+                models = listOf("gpt-image-1"),
+                modelType = "openai_compatible_image",
+            ),
+            ChannelTemplate(
+                labelRes = R.string.channel_template_gemini,
+                name = "Gemini",
+                baseUrl = "https://generativelanguage.googleapis.com",
+                models = emptyList(),
+                modelType = "gemini_image",
+            ),
+            ChannelTemplate(
+                labelRes = R.string.channel_template_grok,
+                name = "Grok",
+                baseUrl = "https://api.x.ai",
+                models = listOf("grok-imagine-image"),
+                modelType = "grok_image",
+            ),
+            ChannelTemplate(
+                labelRes = R.string.channel_template_agnes,
+                name = "Agnes",
+                baseUrl = "https://apihub.agnes-ai.com",
+                models = listOf("agnes-image-2.1-flash"),
+                modelType = "agnes_image",
+            ),
+            ChannelTemplate(
+                labelRes = R.string.channel_template_compatible,
+                name = "OpenAI Compatible",
+                baseUrl = "",
+                models = emptyList(),
+                modelType = "openai_compatible_image",
+            ),
+            ChannelTemplate(
+                labelRes = R.string.channel_template_local,
+                name = "Local Image API",
+                baseUrl = "http://127.0.0.1:8000",
+                models = emptyList(),
+                modelType = "openai_compatible_image",
+            ),
+        )
+    }
+
+    private fun applyChannelTemplate(
+        template: ChannelTemplate,
+        name: EditText,
+        baseUrl: EditText,
+        enabledModels: EditText,
+        extra: EditText,
+        refreshVisual: () -> Unit,
+    ) {
+        name.setText(template.name)
+        baseUrl.setText(template.baseUrl)
+        enabledModels.setText(template.models.joinToString(", "))
+        val modelTypes = template.models.associateWith { template.modelType }
+        extra.setText(withModelTypes(extra.text?.toString().orEmpty().ifBlank { "{}" }, template.models, modelTypes))
+        refreshVisual()
+        Toast.makeText(this, getString(R.string.channel_template_applied, getString(template.labelRes)), Toast.LENGTH_SHORT).show()
     }
 
     private fun extraModeRow(
@@ -1703,6 +1851,21 @@ class MainActivity : AppCompatActivity() {
                 })
                 return
             }
+            panel.addView(dialogButtonGrid(
+                listOf(
+                    UiAction(R.string.action_batch_model_type) {
+                        showBatchModelTypeDialog(models, selectedTypes) {
+                            syncExtraModelTypes(extra, models, selectedTypes)
+                            render()
+                        }
+                    },
+                    UiAction(R.string.action_use_inferred_type) {
+                        models.forEach { model -> selectedTypes.remove(model) }
+                        syncExtraModelTypes(extra, models, selectedTypes)
+                        render()
+                    },
+                ),
+            ))
             models.forEach { model ->
                 val modelType = modelInterfaceTypeFor(model, selectedTypes[model])
                 panel.addView(LinearLayout(this).apply {
@@ -1772,6 +1935,84 @@ class MainActivity : AppCompatActivity() {
                         })
                     }
                 })
+            }
+        }
+    }
+
+    private fun validateChannelDraft(
+        existing: ProviderChannel?,
+        name: String,
+        baseUrl: String,
+        apiKey: String,
+        enabledModels: String,
+        timeout: String,
+        proxy: String,
+        extra: String,
+        enabled: Boolean,
+    ) {
+        val cleanBaseUrl = baseUrl.trim().trimEnd('/')
+        if (cleanBaseUrl.isBlank()) {
+            Toast.makeText(this, R.string.channel_base_url_required, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!isValidHttpBaseUrl(cleanBaseUrl)) {
+            Toast.makeText(this, R.string.channel_invalid_base_url, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val cleanExtra = extra.trim().ifBlank { "{}" }
+        if (runCatching { JSONObject(cleanExtra) }.isFailure) {
+            Toast.makeText(this, R.string.channel_invalid_extra, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val encryptedKey = runCatching {
+            if (apiKey.isBlank()) existing?.apiKey else SecureKeyStore.encrypt(apiKey)
+        }.getOrElse {
+            Toast.makeText(this, getString(R.string.channel_key_encrypt_failed, it.message.orEmpty()), Toast.LENGTH_LONG).show()
+            return
+        }
+        val models = parseModelNames(enabledModels)
+        val draft = ProviderChannel(
+            id = existing?.id ?: java.util.UUID.randomUUID().toString(),
+            name = name.trim().ifBlank { getString(R.string.add_channel_title) },
+            providerType = "openai_compatible_image",
+            baseUrl = cleanBaseUrl,
+            apiKey = encryptedKey,
+            defaultModel = models.firstOrNull().orEmpty(),
+            enabledModels = models,
+            timeoutSeconds = timeout.toIntOrNull()?.coerceIn(10, 900) ?: 280,
+            enabled = enabled,
+            proxy = proxy.trim(),
+            extraJson = withModelTypes(cleanExtra, models),
+            createdAt = existing?.createdAt ?: System.currentTimeMillis(),
+        )
+        val adapter = ProviderRegistry.forChannel(draft)
+        if (adapter == null) {
+            Toast.makeText(this, getString(R.string.channel_test_no_adapter, draft.providerType), Toast.LENGTH_LONG).show()
+            return
+        }
+
+        Toast.makeText(this, getString(R.string.channel_test_running, draft.name), Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { adapter.listModels(draft) }
+            if (result.success) {
+                MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle(R.string.channel_test_success_title)
+                    .setMessage(
+                        getString(
+                            R.string.channel_validate_success,
+                            result.httpStatus?.toString() ?: "-",
+                            result.elapsedMillis,
+                            result.models.size,
+                        ),
+                    )
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            } else {
+                MaterialAlertDialogBuilder(this@MainActivity)
+                    .setTitle(R.string.channel_test_failed_title)
+                    .setMessage(result.error.ifBlank { result.rawPreview })
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
             }
         }
     }
@@ -1923,11 +2164,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val KEY_TAB = "current_tab"
-        private const val KEY_WORKFLOW_ID = "workflow_id"
-        private const val KEY_WORKFLOW_LABEL = "workflow_label"
-        private const val KEY_WORKFLOW_SUMMARY = "workflow_summary"
-        private const val KEY_WORKFLOW_STEPS = "workflow_steps"
-        private const val KEY_WORKFLOW_REQUIRES_REFERENCE = "workflow_requires_reference"
         private const val MAX_VISIBLE_MODELS = 200
         private const val REQUEST_WRITE_EXTERNAL_STORAGE = 2001
     }
@@ -1945,5 +2181,13 @@ class MainActivity : AppCompatActivity() {
     private data class ExtraVisualEditor(
         val view: View,
         val refresh: () -> Unit,
+    )
+
+    private data class ChannelTemplate(
+        val labelRes: Int,
+        val name: String,
+        val baseUrl: String,
+        val models: List<String>,
+        val modelType: String,
     )
 }

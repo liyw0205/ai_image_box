@@ -12,6 +12,7 @@ object ResponseParser {
     private val quotedSecretRegex = Regex("(?i)\"(api[_-]?key|authorization|cookie|set-cookie|token|secret)\"\\s*:\\s*\"[^\"]*\"")
     private val urlCredentialRegex = Regex("(?i)(https?://)[^\\s/@]+:[^\\s/@]+@")
     private val dataUrlRegex = Regex("^data:(image/[A-Za-z0-9.+-]+);base64,(.+)$", RegexOption.IGNORE_CASE)
+    private val dataVideoUrlRegex = Regex("^data:(video/[A-Za-z0-9.+-]+);base64,(.+)$", RegexOption.IGNORE_CASE)
     private val httpUrlRegex = Regex("https?://[^\\s\"'<>)]*", RegexOption.IGNORE_CASE)
 
     fun parseModels(raw: String, secrets: Collection<String> = emptyList()): List<ModelInfo> {
@@ -52,6 +53,13 @@ object ResponseParser {
         return out.values.toList()
     }
 
+    fun parseVideoCandidates(raw: String, responseBaseUrl: String = ""): List<ParsedImageCandidate> {
+        val root = parseJson(raw) ?: return emptyList()
+        val out = linkedMapOf<String, ParsedImageCandidate>()
+        scanVideoValue(root, responseBaseUrl, out)
+        return out.values.toList()
+    }
+
     fun preview(raw: String, secrets: Collection<String> = emptyList(), maxChars: Int = DEFAULT_PREVIEW_CHARS): String {
         val redacted = redact(raw, secrets)
             .replace(Regex("\\s+"), " ")
@@ -78,13 +86,17 @@ object ResponseParser {
     }
 
     fun decodeBase64Image(value: String): ByteArray {
-        val dataUrl = dataUrlRegex.find(value.trim())
+        val trimmed = value.trim()
+        val dataUrl = dataUrlRegex.find(trimmed) ?: dataVideoUrlRegex.find(trimmed)
         val payload = dataUrl?.groupValues?.getOrNull(2) ?: value
         return Base64.decode(payload.trim(), Base64.DEFAULT)
     }
 
     fun mimeTypeForDataUrl(value: String): String {
-        return dataUrlRegex.find(value.trim())?.groupValues?.getOrNull(1).orEmpty()
+        val trimmed = value.trim()
+        return dataUrlRegex.find(trimmed)?.groupValues?.getOrNull(1)
+            ?: dataVideoUrlRegex.find(trimmed)?.groupValues?.getOrNull(1)
+            ?: ""
     }
 
     fun guessImageMimeType(bytes: ByteArray, fallback: String = ""): String {
@@ -111,6 +123,17 @@ object ResponseParser {
             val riff = String(bytes.copyOfRange(0, 4), Charsets.ISO_8859_1)
             val webp = String(bytes.copyOfRange(8, 12), Charsets.ISO_8859_1)
             if (riff == "RIFF" && webp == "WEBP") return "image/webp"
+        }
+        return fallback
+    }
+
+    fun guessVideoMimeType(bytes: ByteArray, fallback: String = ""): String {
+        if (bytes.size >= 12) {
+            val ftyp = String(bytes.copyOfRange(4, 8), Charsets.ISO_8859_1)
+            if (ftyp == "ftyp") return "video/mp4"
+            val riff = String(bytes.copyOfRange(0, 4), Charsets.ISO_8859_1)
+            val webp = String(bytes.copyOfRange(8, 12), Charsets.ISO_8859_1)
+            if (riff == "RIFF" && webp == "AVI ") return "video/avi"
         }
         return fallback
     }
@@ -171,6 +194,86 @@ object ResponseParser {
             val key = keys.next()
             scanValue(obj.opt(key), responseBaseUrl, revisedPrompt, out)
         }
+    }
+
+    private fun scanVideoValue(
+        value: Any?,
+        responseBaseUrl: String,
+        out: MutableMap<String, ParsedImageCandidate>,
+    ) {
+        when (value) {
+            is JSONObject -> scanVideoObject(value, responseBaseUrl, out)
+            is JSONArray -> {
+                for (index in 0 until value.length()) {
+                    scanVideoValue(value.opt(index), responseBaseUrl, out)
+                }
+            }
+            is String -> addVideoStringCandidate(value, responseBaseUrl, out, allowAnyUrl = false)
+        }
+    }
+
+    private fun scanVideoObject(
+        obj: JSONObject,
+        responseBaseUrl: String,
+        out: MutableMap<String, ParsedImageCandidate>,
+    ) {
+        val preferredKeys = listOf(
+            "video", "video_url", "videoUrl", "url", "download_url", "downloadUrl",
+            "result_url", "resultUrl", "output_url", "outputUrl", "file_url", "fileUrl",
+        )
+        preferredKeys.forEach { key ->
+            if (obj.has(key)) addVideoStringCandidate(obj.optString(key, ""), responseBaseUrl, out, allowAnyUrl = true)
+        }
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            scanVideoValue(obj.opt(key), responseBaseUrl, out)
+        }
+    }
+
+    private fun addVideoStringCandidate(
+        rawValue: String,
+        responseBaseUrl: String,
+        out: MutableMap<String, ParsedImageCandidate>,
+        allowAnyUrl: Boolean,
+    ) {
+        val value = rawValue.trim()
+        if (value.isBlank()) return
+
+        val dataUrl = dataVideoUrlRegex.find(value)
+        if (dataUrl != null) {
+            putCandidate(
+                out,
+                ParsedImageCandidate(
+                    kind = ParsedImageKind.DATA_URL,
+                    value = value,
+                    mimeType = dataUrl.groupValues.getOrNull(1).orEmpty(),
+                ),
+            )
+            return
+        }
+
+        httpUrlRegex.findAll(value).forEach { match ->
+            val url = match.value.trimEnd('.', ',', ';')
+            if (allowAnyUrl || looksLikeVideoUrl(url)) {
+                putCandidate(out, ParsedImageCandidate(kind = ParsedImageKind.URL, value = url))
+            }
+        }
+
+        val absolute = absoluteUrl(value, responseBaseUrl)
+        if (absolute != null && (allowAnyUrl || looksLikeVideoUrl(absolute))) {
+            putCandidate(out, ParsedImageCandidate(kind = ParsedImageKind.URL, value = absolute))
+        }
+    }
+
+    private fun looksLikeVideoUrl(value: String): Boolean {
+        val path = value.substringBefore('?').lowercase()
+        return path.endsWith(".mp4") ||
+            path.endsWith(".webm") ||
+            path.endsWith(".mov") ||
+            path.endsWith(".m4v") ||
+            path.endsWith(".avi") ||
+            path.endsWith(".m3u8")
     }
 
     private fun addStringCandidate(

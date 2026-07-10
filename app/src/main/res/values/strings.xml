@@ -13,16 +13,16 @@
     <string name="badge_channels">多接口 provider 管理</string>
 
     <string name="studio_headline">统一的多接口创作工作台</string>
-    <string name="studio_body">当前已接入 OpenAI-compatible、Gemini、Agnes、Grok 图像链路，可选择工作流、渠道模型、提示词和参考图提交任务，生成结果会保存到本地缓存并进入历史。</string>
-    <string name="studio_status">已写入 channels.json、task_state.json、generation_records.jsonl 和生成文件缓存；工作流、请求/响应、同渠道模型回退和 attempts 都会进入详情。</string>
+    <string name="studio_body">当前已接入 OpenAI-compatible、Gemini、Agnes、Grok 图像链路和通用异步视频链路，可选择渠道模型、提示词和参考图提交任务，生成结果会保存到本地缓存并进入历史。</string>
+    <string name="studio_status">已写入 channels.json、task_state.json、generation_records.jsonl 和生成文件缓存；请求/响应、跨渠道回退、视频 job 和 attempts 都会进入详情。</string>
 
     <string name="tasks_headline">任务队列会承载长生图和异步生视频</string>
     <string name="tasks_body">队列会记录 Queued、Running、Polling、Downloading、Succeeded、Failed 和 Canceled 状态，并支持重试、取消和错误复现。</string>
-    <string name="tasks_status">0.3.0 起已接入 GenerationManager；后续补取消、重试、清理已完成和 0.5.0 生视频轮询前台服务。</string>
+    <string name="tasks_status">已接入 GenerationManager、取消、重试、清理已完成、重启恢复和通用异步视频轮询；后续补前台服务常驻轮询。</string>
 
     <string name="history_headline">历史记录用于复用参数和追踪接口表现</string>
     <string name="history_body">每次生成都会保存 provider、model、耗时、请求摘要、响应预览、本地结果文件和 attempts，方便复用和诊断。</string>
-    <string name="history_status">首版历史将使用本地 JSONL 文件，不先引入数据库，保持和 MediaVault 一样的轻量可维护策略。</string>
+    <string name="history_status">历史使用本地 JSONL 文件，已支持缩略图、详情、参数复用和公共目录导出；后续补筛选、素材库和缓存统计。</string>
 
     <string name="channels_headline">渠道管理是多模型能力的核心</string>
     <string name="channels_body">这里可配置 OpenAI-compatible、Gemini、Agnes、Grok 和后续异步视频 provider。API Key 将保存在本机加密存储，导出配置默认脱敏。</string>
@@ -68,21 +68,22 @@
     <string name="field_extra_json">扩展 JSON</string>
     <string name="field_enabled">启用渠道</string>
     <string name="field_extra_visual">扩展配置</string>
+    <string name="field_channel_templates">接口模板</string>
     <string name="extra_mode_visual">可视化</string>
     <string name="extra_mode_json">JSON</string>
     <string name="extra_visual_hint">这里用于修改已配置模型的类型，保存时会同步写入扩展 JSON。</string>
     <string name="extra_visual_no_models">暂无已配置模型。请先拉取模型或在“启用模型”中填写模型名。</string>
+    <string name="channel_template_applied">已应用模板：%1$s</string>
     <string name="studio_channel_type">模型类型：%1$s</string>
     <string name="channel_template_openai">OpenAI</string>
     <string name="channel_template_compatible">兼容接口</string>
     <string name="channel_template_local">本地接口</string>
-    <string name="channel_provider_openai_image">OpenAI 图</string>
-    <string name="channel_provider_gemini_image">Gemini 图</string>
-    <string name="channel_provider_agnes_image">Agnes 图</string>
-    <string name="channel_provider_grok_image">Grok 图</string>
-    <string name="channel_provider_video">视频</string>
+    <string name="channel_template_gemini">Gemini</string>
+    <string name="channel_template_grok">Grok</string>
+    <string name="channel_template_agnes">Agnes</string>
 
     <string name="action_save">保存</string>
+    <string name="action_validate_channel">校验</string>
     <string name="action_edit">编辑</string>
     <string name="action_test_models">测试</string>
     <string name="action_fetch_models">模型</string>
@@ -102,6 +103,7 @@
     <string name="channel_test_success_title">渠道测试成功</string>
     <string name="channel_test_empty">接口连通，但没有返回模型列表。\nHTTP：%1$s\n耗时：%2$d ms</string>
     <string name="channel_test_models">HTTP：%1$s\n耗时：%2$d ms\n模型数：%3$d\n\n%4$s</string>
+    <string name="channel_validate_success">校验成功。\nHTTP：%1$s\n耗时：%2$d ms\n模型数：%3$d</string>
     <string name="channel_model_picker_title">选择“%1$s”的模型</string>
     <string name="channel_model_picker_summary">HTTP：%1$s · 耗时：%2$d ms · 上游模型：%3$d</string>
     <string name="field_model_filter">筛选模型，支持空格分词</string>
@@ -121,8 +123,11 @@
     <string name="action_clear_visible">清空当前</string>
     <string name="action_save_models">保存模型</string>
     <string name="action_change_model_type">改类型</string>
+    <string name="action_batch_model_type">批量类型</string>
     <string name="action_use_inferred_type">使用推断</string>
     <string name="channel_model_type_title">设置模型类型：%1$s</string>
+    <string name="channel_batch_model_type_title">批量设置模型类型</string>
+    <string name="channel_batch_model_type_message">将 %1$d 个模型统一设置为：</string>
     <string name="channel_models_saved">已保存 %1$d 个启用模型。</string>
     <string name="channel_models_select_required">请至少选择一个模型。</string>
 
@@ -131,7 +136,7 @@
     <string name="studio_generate_started">正在调用 %1$s / %2$s。</string>
     <string name="studio_generate_succeeded">生成成功，已保存：%1$s</string>
     <string name="studio_generate_succeeded_multi">生成成功，共 %1$d 张：\n%2$s</string>
-    <string name="studio_generate_succeeded_preview">生成成功，共 %1$d 张。首张结果已显示，可在历史中查看详情或保存到公共目录。</string>
+    <string name="studio_generate_succeeded_preview">生成成功，共 %1$d 个结果。首个结果已显示，可在历史中查看详情或保存到公共目录。</string>
     <string name="studio_generate_failed">生成失败：%1$s</string>
     <string name="studio_generate_cancelled">任务已取消：%1$s</string>
     <string name="studio_result_image">生成结果预览图</string>
