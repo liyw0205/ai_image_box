@@ -58,6 +58,7 @@ import com.aiimagebox.generation.ReferenceMediaPolicy
 import com.aiimagebox.generation.ProviderRegistryGenerationExecutor
 import com.aiimagebox.provider.ModelListResult
 import com.aiimagebox.provider.ProviderRegistry
+import com.aiimagebox.provider.VideoTemplateValidator
 import com.aiimagebox.ui.StudioForm
 import com.aiimagebox.util.PublicMediaExporter
 import com.aiimagebox.util.ConfigTransfer
@@ -2460,6 +2461,11 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.channel_invalid_extra, Toast.LENGTH_SHORT).show()
             return
         }
+        val templateValidation = VideoTemplateValidator.validate(cleanBaseUrl, parseModelNames(enabledModels), cleanExtra)
+        if (!templateValidation.valid) {
+            Toast.makeText(this, getString(R.string.channel_invalid_video_template, templateValidation.message), Toast.LENGTH_LONG).show()
+            return
+        }
         val encryptedKey = runCatching {
             if (apiKey.isBlank()) existing?.apiKey else SecureKeyStore.encrypt(apiKey)
         }.getOrElse {
@@ -2557,6 +2563,11 @@ class MainActivity : AppCompatActivity() {
             .split(',', '\n')
             .map { it.trim() }
             .filter { it.isNotBlank() }
+        val templateValidation = VideoTemplateValidator.validate(cleanBaseUrl, modelList, cleanExtra)
+        if (!templateValidation.valid) {
+            Toast.makeText(this, getString(R.string.channel_invalid_video_template, templateValidation.message), Toast.LENGTH_LONG).show()
+            return
+        }
         val modelTypeSource = modelList
         val channel = ProviderChannel(
             id = existing?.id ?: java.util.UUID.randomUUID().toString(),

@@ -172,7 +172,7 @@ data class ProviderCapabilities(
 
 - Grok 视频：`https://api.x.ai`，默认提交 `POST /v1/videos/generations`，轮询 `/v1/videos/generations/{id}`，使用通用视频 JSON 字段。
 - Seedance：`https://ark.cn-beijing.volces.com`，提交 `POST /api/v3/contents/generations/tasks`，轮询 `/api/v3/contents/generations/tasks/{id}`，提示词与参数写入 `content` 数组。
-- 渠道 `extra.video_provider` 选择请求映射；请求级 extra 可覆盖非内部字段。
+- 渠道 `extra.video_provider` 选择请求映射；请求级 extra 可覆盖非内部字段。保存前会校验已知 provider、路径格式和轮询占位符。
 
 通用字段映射：
 

@@ -50,6 +50,7 @@
     <string name="channel_base_url_required">当前 provider 需要填写 Base URL。</string>
     <string name="channel_invalid_base_url">Base URL 必须是有效的 http 或 https 地址。</string>
     <string name="channel_invalid_extra">扩展 JSON 格式不正确。</string>
+    <string name="channel_invalid_video_template">视频模板无效：%1$s</string>
     <string name="channel_key_encrypt_failed">API Key 加密失败：%1$s</string>
 
     <string name="add_channel_title">添加渠道</string>
