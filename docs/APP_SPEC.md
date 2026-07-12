@@ -99,9 +99,9 @@ Draft -> Queued -> Running -> Polling -> Downloading -> Succeeded
 
 ## 当前实现状态
 
-0.8.5 已完成生图与生视频链路、AgentRegistry/AgentPipeline、四类内置代理、远端 job 恢复、ForegroundService 通知以及历史素材库核心功能：渠道管理、API Key 加密、模型拉取/筛选/类型编辑、渠道模板、快速校验、文生图、图生图参考图、OpenAI-compatible/Gemini/Agnes/Grok 图像 adapter、通用异步视频 submit/poll/download、视频结果落盘和公共 Movies 导出、同渠道和跨渠道回退、任务取消/重试/清理、重启恢复、历史缩略图、参数复用、多图落盘和公共目录导出。
+0.8.6 已完成生图与生视频链路、AgentRegistry/AgentPipeline、四类内置代理、远端 job 恢复、ForegroundService 通知以及历史素材库核心功能：渠道管理、API Key 加密、模型拉取/筛选/类型编辑、渠道模板、快速校验、文生图、图生图参考图、OpenAI-compatible/Gemini/Agnes/Grok 图像 adapter、通用异步视频 submit/poll/download、视频结果落盘和公共 Movies 导出、同渠道和跨渠道回退、任务取消/重试/清理、重启恢复、历史缩略图、参数复用、多图落盘和公共目录导出。
 
-Grok 与 Seedance 已提供独立渠道模板和请求字段映射；仍需使用有效账户执行真实接口回归。横屏已使用 NavigationRail，并补充初始焦点、左右焦点出口、系统焦点高亮和聚焦控件自动滚入可视区域；完整遥控真机回归仍需设备验收。配置与诊断文件已可通过系统文件创建器保存到用户选择的位置。历史筛选结果可直接复用首条记录，图片和视频结果均可作为参考素材；视频模型显示 1 至 30 秒时长控件并完整进入任务与历史。
+Grok 与 Seedance 已提供独立渠道模板和请求字段映射；仍需使用有效账户执行真实接口回归。横屏已使用 NavigationRail，并补充初始焦点、左右焦点出口、系统焦点高亮和聚焦控件自动滚入可视区域；完整遥控真机回归仍需设备验收。配置与诊断文件已可通过系统文件创建器保存到用户选择的位置。历史筛选结果可直接复用首条记录，图片和视频结果均可作为参考素材；视频模型显示 1 至 30 秒时长控件并完整进入任务与历史。诊断包会对任务、历史、嵌入 JSON 和代理元数据执行递归脱敏。
 
 ## 非目标
 

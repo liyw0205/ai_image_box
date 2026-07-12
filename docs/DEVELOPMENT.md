@@ -91,7 +91,7 @@ app/src/main/java/com/aiimagebox/
 | --- | --- |
 | data | 配置、任务、记录、素材索引、加密密钥存取 |
 | provider | OpenAI-compatible、Gemini、Agnes、Grok 生图请求构造、响应解析和下载；通用异步视频 submit/poll/download |
-| generation | 队列、取消、重试、恢复、同/跨渠道回退、视频模式路由和 attempts 汇总；前台轮询服务未接入 |
+| generation | 队列、取消、重试、恢复、同/跨渠道回退、视频模式路由和 attempts 汇总；前台服务通知和远端视频续轮询已接入 |
 | ui | `MainActivity` 承载创作、任务、历史、渠道管理；`StudioForm` 承载创作表单 |
 | util | 脱敏、JSON 文件、公共图片目录导出 |
 
@@ -121,6 +121,7 @@ API Key 不明文写进可导出的 JSON：
 
 - 本机保存：Android Keystore 加密。
 - 导出配置：默认脱敏，仅保留渠道名、provider、base URL、模型和非敏感参数，通过系统文件创建器保存到用户选择的位置。
+- 诊断导出：对任务、历史、attempts、代理输出和嵌入 JSON 进行递归敏感字段清理。
 - 诊断包：必须走脱敏工具，不能包含 API Key、Authorization、Cookie。
 
 ## Provider 抽象

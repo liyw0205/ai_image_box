@@ -13,10 +13,10 @@ object DiagnosticsExporter {
     fun create(appDirectories: AppDirectories, generationStore: GenerationStore): File {
         val output = File(appDirectories.diagnostics, "diagnostics_${System.currentTimeMillis()}.zip")
         val records = JSONArray().also { array ->
-            generationStore.listRecentRecords(100).forEach { record -> array.put(record.toJson(redact = true)) }
+            generationStore.listRecentRecords(100).forEach { record -> array.put(redactForExport(record.toJson(redact = true))) }
         }
         val tasks = JSONArray().also { array ->
-            generationStore.loadTasks().takeLast(100).forEach { task -> array.put(task.toJson(redact = true)) }
+            generationStore.loadTasks().takeLast(100).forEach { task -> array.put(redactForExport(task.toJson(redact = true))) }
         }
         val summary = JSONObject()
             .put("created_at", System.currentTimeMillis())
@@ -32,6 +32,8 @@ object DiagnosticsExporter {
         }
         return output
     }
+
+    internal fun redactForExport(value: JSONObject): JSONObject = Redaction.redactJsonObject(value)
 
     fun directorySize(directory: File): Long = directory.walkTopDown()
         .filter { it.isFile }

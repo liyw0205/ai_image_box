@@ -17,6 +17,10 @@ object Redaction {
         "password",
         "proxyauthorization",
         "xapikey",
+        "cookie",
+        "session",
+        "credential",
+        "privatekey",
     )
 
     private val bearerPattern = Regex("""(?i)(Bearer\s+)[A-Za-z0-9._~+\-/]+=*""")
@@ -70,12 +74,20 @@ object Redaction {
         return redacted
     }
 
+    private fun redactEmbeddedJson(value: String): String {
+        val trimmed = value.trim()
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+            return runCatching { redactJsonString(value) }.getOrDefault(redactText(value))
+        }
+        return redactText(value)
+    }
+
     private fun redactJsonValue(value: Any?): Any? {
         return when (value) {
             null, JSONObject.NULL -> JSONObject.NULL
             is JSONObject -> redactJsonObject(value)
             is JSONArray -> redactJsonArray(value)
-            is String -> redactText(value)
+            is String -> redactEmbeddedJson(value)
             else -> value
         }
     }
