@@ -141,7 +141,7 @@ Grok：
 
 ## 生视频适配规则
 
-状态：已实现最小闭环。`GenericAsyncVideoAdapter` 支持提交 JSON 请求、从提交响应直接提取视频 URL 或解析 job id、按 poll URL/模板轮询、下载视频到本地缓存，并将 job id、poll URL、HTTP 状态、响应预览和 attempts 写入详情。应用级队列、前台服务通知、远端 job 恢复和视频缩略图均已完成。
+状态：已实现最小闭环，并具备本地 MockWebServer submit/poll/download/失败脱敏回归。`GenericAsyncVideoAdapter` 支持提交 JSON 请求、从提交响应直接提取视频 URL 或解析 job id、按 poll URL/模板轮询、下载视频到本地缓存，并将 job id、poll URL、HTTP 状态、响应预览和 attempts 写入详情。应用级队列、前台服务通知、远端 job 恢复和视频缩略图均已完成。
 
 生视频接口差异大，首版用通用异步 job 适配。
 
