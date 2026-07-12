@@ -202,4 +202,23 @@
     <string name="action_clear_cache">清理生成缓存</string>
     <string name="cache_clear_done">已清理 %1 个缓存文件，配置和历史记录未删除。</string>
     <string name="history_file_missing">本地结果文件已缺失</string>
+    <string name="history_time_hint">时间范围</string>
+    <string name="history_time_all">全部时间</string>
+    <string name="history_time_today">最近 24 小时</string>
+    <string name="history_time_7_days">最近 7 天</string>
+    <string name="history_time_30_days">最近 30 天</string>
+    <string name="action_asset_detail">素材详情</string>
+    <string name="asset_detail_title">素材详情</string>
+    <string name="asset_detail_empty">该记录没有结果素材。</string>
+    <string name="asset_detail_index">素材 %1</string>
+    <string name="asset_detail_type">类型：%1$s / %2$s</string>
+    <string name="asset_detail_dimensions">尺寸：%1$s × %2$s</string>
+    <string name="asset_detail_duration">时长：%1</string>
+    <string name="asset_detail_size">大小：%1 bytes</string>
+    <string name="asset_detail_exists">文件存在：%1</string>
+    <string name="asset_detail_path">路径：%1</string>
+    <string name="asset_detail_metadata">元数据：
+%1</string>
+    <string name="yes">是</string>
+    <string name="no">否</string>
 </resources>

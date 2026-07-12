@@ -80,6 +80,7 @@ class MainActivity : AppCompatActivity() {
     private var latestResultPaths: List<String> = emptyList()
     private var pendingPublicExportPaths: List<String> = emptyList()
     private var historyFilter = HistoryFilter.ALL
+    private var historyTimeFilter = HistoryTimeFilter.ALL
     private val referenceImagePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) importReferenceImage(uri)
     }
@@ -97,6 +98,7 @@ class MainActivity : AppCompatActivity() {
         wireNavigation()
         wireStudioForm()
         wireHistoryFilter()
+        wireHistoryTimeFilter()
         binding.historySearch?.doAfterTextChanged { renderHistoryPanel() }
         binding.historyClearCache?.setOnClickListener { clearGeneratedCache() }
         observeGenerationEvents()
@@ -925,10 +927,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun wireHistoryTimeFilter() {
+        val filters = HistoryTimeFilter.values()
+        val view = requireNotNull(binding.historyTimeFilter)
+        view.setSimpleItems(filters.map { getString(it.labelRes) }.toTypedArray())
+        view.setText(getString(historyTimeFilter.labelRes), false)
+        view.setOnItemClickListener { _, _, position, _ ->
+            historyTimeFilter = filters.getOrElse(position) { HistoryTimeFilter.ALL }
+            renderHistoryPanel()
+        }
+    }
+
     private fun renderHistoryPanel() {
         val allRecords = generationStore.listRecentRecords(500)
         val query = binding.historySearch?.text?.toString()?.trim().orEmpty()
-        val records = allRecords.filter { historyFilter.matches(it) && it.matchesHistoryQuery(query) }.take(100)
+        val records = allRecords.filter { historyFilter.matches(it) && historyTimeFilter.matches(it) && it.matchesHistoryQuery(query) }.take(100)
         binding.historySummary.text = getString(R.string.history_filter_summary, records.size, allRecords.size)
         binding.historyEmpty.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
         binding.historyList.removeAllViews()
@@ -1009,6 +1022,7 @@ class MainActivity : AppCompatActivity() {
                     UiAction(R.string.action_use_as_reference) { useRecordAsReference(record) },
                     UiAction(R.string.action_save_public) { exportRecordAssets(record) },
                     UiAction(R.string.action_view_detail) { showHistoryDetails(record) },
+                    UiAction(R.string.action_asset_detail) { showAssetDetails(record) },
                 ),
             ),
         )
@@ -1064,6 +1078,29 @@ class MainActivity : AppCompatActivity() {
         reuseHistoryRecord(record)
         binding.studioForm.setReferenceImage(imagePath)
         binding.studioForm.setStatus(getString(R.string.history_reference_applied, record.taskId.take(8)))
+    }
+
+    private fun showAssetDetails(record: GenerationRecord) {
+        val details = record.assets.mapIndexed { index, asset ->
+            val media = asset.media
+            val file = File(media.filePath)
+            val metadata = runCatching { JSONObject(asset.metadataJson).toString(2) }.getOrDefault(asset.metadataJson)
+            listOf(
+                getString(R.string.asset_detail_index, index + 1),
+                getString(R.string.asset_detail_type, asset.mode.wireName, media.mimeType),
+                getString(R.string.asset_detail_dimensions, media.width?.toString() ?: "-", media.height?.toString() ?: "-"),
+                getString(R.string.asset_detail_duration, media.durationMs?.let { formatDuration(it) } ?: "-"),
+                getString(R.string.asset_detail_size, media.sizeBytes?.toString() ?: "-"),
+                getString(R.string.asset_detail_exists, if (file.isFile) getString(R.string.yes) else getString(R.string.no)),
+                getString(R.string.asset_detail_path, media.filePath),
+                getString(R.string.asset_detail_metadata, metadata),
+            ).joinToString("\n")
+        }.joinToString("\n\n")
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.asset_detail_title)
+            .setMessage(details.ifBlank { getString(R.string.asset_detail_empty) })
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun showHistoryDetails(record: GenerationRecord) {
@@ -2223,6 +2260,18 @@ class MainActivity : AppCompatActivity() {
     private fun color(resId: Int): Int = ContextCompat.getColor(this, resId)
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
+
+    private enum class HistoryTimeFilter(val labelRes: Int, val maxAgeMs: Long?) {
+        ALL(R.string.history_time_all, null),
+        TODAY(R.string.history_time_today, 24L * 60 * 60 * 1000),
+        DAYS_7(R.string.history_time_7_days, 7L * 24 * 60 * 60 * 1000),
+        DAYS_30(R.string.history_time_30_days, 30L * 24 * 60 * 60 * 1000);
+
+        fun matches(record: GenerationRecord): Boolean {
+            val age = maxAgeMs ?: return true
+            return record.recordedAt >= System.currentTimeMillis() - age
+        }
+    }
 
     private enum class HistoryFilter(val labelRes: Int) {
         ALL(R.string.history_filter_all),
