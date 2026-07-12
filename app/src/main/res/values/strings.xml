@@ -95,6 +95,13 @@
     <string name="action_delete">删除</string>
     <string name="action_reuse_parameters">复用参数</string>
     <string name="action_reuse_filtered_latest">复用筛选首条</string>
+    <string name="action_reuse_selected">批量复用（%1）</string>
+    <string name="action_confirm">确认</string>
+    <string name="history_batch_select">加入批量复用</string>
+    <string name="history_batch_reuse_title">批量复用历史参数</string>
+    <string name="history_batch_reuse_confirm">将创建 %1$d 个新任务，跳过 %2$d 条不可复用记录。</string>
+    <string name="history_batch_reuse_enqueued">已创建 %1$d 个新任务，跳过 %2$d 条不可复用记录。</string>
+    <string name="history_batch_reuse_none_ready">所选记录均不可复用。请检查渠道、模型和参考素材。</string>
     <string name="history_filtered_reuse_empty">当前筛选结果为空，没有可复用记录。</string>
     <string name="action_view_detail">详情</string>
     <string name="action_save_public">保存到公共目录</string>
@@ -204,7 +211,7 @@
     <string name="history_reference_applied">已将任务 %1$s 的结果设为参考素材。</string>
     <string name="history_search_hint">搜索 provider、模型或提示词</string>
     <string name="action_clear_cache">清理生成缓存</string>
-    <string name="cache_clear_done">已清理 %1 个缓存文件，配置和历史记录未删除。</string>
+    <string name="cache_clear_done">已清理 %1$d 个缓存文件，配置和历史记录未删除。</string>
     <string name="history_file_missing">本地结果文件已缺失</string>
     <string name="history_time_hint">时间范围</string>
     <string name="history_time_all">全部时间</string>

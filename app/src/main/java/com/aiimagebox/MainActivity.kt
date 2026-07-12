@@ -54,6 +54,7 @@ import com.aiimagebox.generation.GenerationQueueItem
 import com.aiimagebox.generation.GenerationRequest
 import com.aiimagebox.generation.GenerationStatus as QueueGenerationStatus
 import com.aiimagebox.generation.GenerationTarget
+import com.aiimagebox.generation.ReferenceMediaPolicy
 import com.aiimagebox.generation.ProviderRegistryGenerationExecutor
 import com.aiimagebox.provider.ModelListResult
 import com.aiimagebox.provider.ProviderRegistry
@@ -90,6 +91,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingDiagnosticsFile: File? = null
     private var historyFilter = HistoryFilter.ALL
     private var historyTimeFilter = HistoryTimeFilter.ALL
+    private val selectedHistoryTaskIds = mutableSetOf<String>()
     private val globalFocusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, focused ->
         if (focused != null && focused.isDescendantOf(binding.mainScroll)) {
             binding.mainScroll.requestChildFocus(focused, focused)
@@ -198,7 +200,7 @@ class MainActivity : AppCompatActivity() {
                 Tab.CHANNELS -> showChannelDialog(null)
                 Tab.TASKS -> clearFinishedTasks()
                 Tab.AGENTS -> showAgentDialog(null)
-                Tab.HISTORY -> reuseLatestFilteredHistory()
+                Tab.HISTORY -> reuseSelectedOrLatestHistory()
                 else -> Toast.makeText(this, getString(R.string.toast_next_milestone), Toast.LENGTH_SHORT).show()
             }
         }
@@ -228,6 +230,7 @@ class MainActivity : AppCompatActivity() {
         binding.body.text = getString(tab.bodyRes)
         binding.statusText.text = getString(tab.statusRes)
         binding.primaryAction.text = getString(if (tab == Tab.HISTORY) R.string.action_reuse_filtered_latest else tab.primaryActionRes)
+        if (tab == Tab.HISTORY) updateHistoryPrimaryAction()
         binding.secondaryAction.visibility = if (tab == Tab.CHANNELS || tab == Tab.AGENTS || tab == Tab.HISTORY) View.VISIBLE else View.GONE
         binding.secondaryAction.text = getString(when (tab) { Tab.AGENTS -> R.string.action_reset_agents; Tab.HISTORY -> R.string.action_diagnostics; else -> R.string.action_refresh_channels })
         binding.channelPanel.visibility = if (tab == Tab.CHANNELS) View.VISIBLE else View.GONE
@@ -1121,13 +1124,70 @@ class MainActivity : AppCompatActivity() {
         return allRecords.filter { historyFilter.matches(it) && historyTimeFilter.matches(it) && it.matchesHistoryQuery(query) }
     }
 
-    private fun reuseLatestFilteredHistory() {
-        val record = filteredHistoryRecords().firstOrNull()
-        if (record == null) {
-            Toast.makeText(this, R.string.history_filtered_reuse_empty, Toast.LENGTH_SHORT).show()
+    private fun updateHistoryPrimaryAction() {
+        if (currentTab != Tab.HISTORY) return
+        binding.primaryAction.text = if (selectedHistoryTaskIds.isEmpty()) {
+            getString(R.string.action_reuse_filtered_latest)
         } else {
-            reuseHistoryRecord(record)
+            getString(R.string.action_reuse_selected, selectedHistoryTaskIds.size)
         }
+    }
+
+    private fun reuseSelectedOrLatestHistory() {
+        if (selectedHistoryTaskIds.isEmpty()) {
+            val record = filteredHistoryRecords().firstOrNull()
+            if (record == null) Toast.makeText(this, R.string.history_filtered_reuse_empty, Toast.LENGTH_SHORT).show()
+            else reuseHistoryRecord(record)
+            return
+        }
+        val selected = generationStore.listRecentRecords(500).filter { it.taskId in selectedHistoryTaskIds }
+        val prepared = selected.map { record -> record to batchReuseRequest(record) }
+        val ready = prepared.mapNotNull { (record, request) -> request?.let { record to it } }
+        val skipped = prepared.size - ready.size
+        if (ready.isEmpty()) {
+            Toast.makeText(this, R.string.history_batch_reuse_none_ready, Toast.LENGTH_SHORT).show()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.history_batch_reuse_title)
+            .setMessage(getString(R.string.history_batch_reuse_confirm, ready.size, skipped))
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.action_confirm) { _, _ ->
+                ready.forEach { (_, request) ->
+                    createStoredTask(request)
+                    generationManager.enqueue(request)
+                }
+                GenerationForegroundService.start(this)
+                selectedHistoryTaskIds.clear()
+                binding.studioForm.setSubmitting(true)
+                binding.studioForm.setStatus(getString(R.string.history_batch_reuse_enqueued, ready.size, skipped))
+                Toast.makeText(this, getString(R.string.history_batch_reuse_enqueued, ready.size, skipped), Toast.LENGTH_LONG).show()
+                renderHistoryPanel()
+            }
+            .show()
+    }
+
+    private fun batchReuseRequest(record: GenerationRecord): GenerationRequest? {
+        val channel = channelStore.load().firstOrNull { it.id == record.channelId && it.enabled } ?: return null
+        val model = record.model.ifBlank { channel.defaultModel }
+        if (model.isBlank() || model !in channel.enabledModels) return null
+        val parameters = runCatching { JSONObject(record.parametersJson) }.getOrDefault(JSONObject())
+        val references = parameters.optJSONArray("reference_images")?.let { array ->
+            buildList { for (index in 0 until array.length()) array.optString(index, "").trim().takeIf { it.isNotBlank() }?.let(::add) }
+        }.orEmpty()
+        if (references.any { !ReferenceMediaPolicy.isSupportedByCurrentAdapters(ReferenceMediaPolicy.kindForPath(it)) }) return null
+        return GenerationRequest(
+            prompt = record.prompt,
+            target = GenerationTarget.fromChannel(channel, model).copy(providerType = record.providerType.ifBlank { channel.providerType }),
+            parameters = GenerationParameters(
+                aspectRatio = parameters.optString("aspect_ratio", "1:1"),
+                resolution = parameters.optString("resolution", "1024x1024"),
+                count = parameters.optInt("count", 1).coerceIn(1, 10),
+                durationSeconds = parameters.optInt("duration_seconds", 0).takeIf { it > 0 },
+                responseFormat = "b64_json",
+                referenceImagePaths = references,
+            ),
+        )
     }
 
     private fun renderHistoryPanel() {
@@ -1258,6 +1318,14 @@ class MainActivity : AppCompatActivity() {
             setTextColor(color(R.color.aib_text_secondary))
             textSize = 14f
             setPadding(0, dp(7), 0, 0)
+        })
+        content.addView(CheckBox(this).apply {
+            text = getString(R.string.history_batch_select)
+            isChecked = record.taskId in selectedHistoryTaskIds
+            setOnCheckedChangeListener { _, checked ->
+                if (checked) selectedHistoryTaskIds.add(record.taskId) else selectedHistoryTaskIds.remove(record.taskId)
+                updateHistoryPrimaryAction()
+            }
         })
         content.addView(
             actionGrid(
