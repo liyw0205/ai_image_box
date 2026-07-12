@@ -15,7 +15,7 @@ class AgentStore(appDirectories: AppDirectories) {
         val loaded = runCatching {
             val root = JsonFiles.readJsonValue(file)
             val array = when (root) {
-                is JSONObject -> root.optJSONArray("agents") ?: JSONArray()
+                is JSONObject -> StorageSchema.readArray(root, "agents")
                 is JSONArray -> root
                 else -> JSONArray()
             }
@@ -32,9 +32,7 @@ class AgentStore(appDirectories: AppDirectories) {
     fun save(definitions: List<AgentDefinition>) {
         JsonFiles.writeObject(
             file,
-            JSONObject()
-                .put("schema_version", 1)
-                .put("agents", JSONArray().also { array -> definitions.forEach { array.put(it.toJson()) } }),
+            StorageSchema.versioned("agents", JSONArray().also { array -> definitions.forEach { array.put(it.toJson()) } }),
         )
     }
 

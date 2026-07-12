@@ -146,7 +146,7 @@ class GenerationStore(appDirectories: AppDirectories) {
     companion object {
         const val TASK_STATE_FILE = "task_state.json"
         const val RECORDS_FILE = "generation_records.jsonl"
-        const val SCHEMA_VERSION = 1
+        const val SCHEMA_VERSION = StorageSchema.CURRENT_VERSION
         const val DEFAULT_RECORD_LIMIT = 50
         const val MAX_RECORD_LIMIT = 500
     }

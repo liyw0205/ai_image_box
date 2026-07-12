@@ -1,5 +1,6 @@
 package com.aiimagebox.data
 
+import com.aiimagebox.util.JsonFiles
 import org.json.JSONArray
 import java.io.File
 
@@ -10,7 +11,7 @@ class ChannelStore(appDirectories: AppDirectories) {
     fun load(): List<ProviderChannel> {
         if (!file.exists()) return emptyList()
         return runCatching {
-            val array = JSONArray(file.readText())
+            val array = StorageSchema.readArray(JsonFiles.readJsonValue(file), "channels")
             buildList {
                 for (index in 0 until array.length()) {
                     val item = array.optJSONObject(index) ?: continue
@@ -23,10 +24,9 @@ class ChannelStore(appDirectories: AppDirectories) {
 
     @Synchronized
     fun save(channels: List<ProviderChannel>) {
-        file.parentFile?.mkdirs()
         val array = JSONArray()
         channels.forEach { array.put(it.toJson()) }
-        file.writeText(array.toString(2))
+        JsonFiles.writeObject(file, StorageSchema.versioned("channels", array))
     }
 
     @Synchronized
