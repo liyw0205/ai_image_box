@@ -185,4 +185,7 @@
     <string name="detail_line_attempt">最近尝试：\n%1$s</string>
     <string name="detail_attempt_empty">暂无尝试记录。</string>
     <string name="detail_attempt_format">第 %1$d 次\n状态：%2$s\nHTTP：%3$s\n耗时：%4$s ms\n错误：%5$s\n响应预览：%6$s</string>
+    <string name="generation_notification_channel">生成任务</string>
+    <string name="generation_notification_title">AI Image Box 正在生成</string>
+    <string name="generation_notification_progress">排队 %1$d，运行 %2$d</string>
 </resources>

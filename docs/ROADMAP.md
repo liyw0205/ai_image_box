@@ -284,6 +284,15 @@
 - provider job 持久化回调移动到应用级执行器。
 - 页面重建复用相同 ChannelStore、GenerationStore 和队列。
 
+## 0.5.4 前台服务通知
+
+状态：初版已完成。提交或恢复生成任务时启动 dataSync 类型 ForegroundService，持续观察应用级生成队列并显示排队和运行数量；队列空闲后自动移除通知并停止服务。
+
+- AndroidManifest 注册 `GenerationForegroundService`。
+- Android 8.0+ 创建低打扰生成任务通知渠道。
+- 通知点击可返回主界面，运行期间保持 ongoing 状态。
+- 队列进入空闲状态后自动 `stopForeground` 和 `stopSelf`。
+
 ## 0.6.0 历史与素材库
 
 状态：部分完成。历史列表、缩略图、参数复用、多图结果落盘、结果公共目录导出和任务/历史详情已经可用；筛选、素材库、批量缓存清理和大列表性能还未整理。

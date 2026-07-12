@@ -216,6 +216,7 @@ class MainActivity : AppCompatActivity() {
             ),
         )
         createStoredTask(generationRequest)
+        GenerationForegroundService.start(this)
         binding.studioForm.setSubmitting(true)
         binding.studioForm.setStatus(getString(R.string.studio_generate_enqueued, generationRequest.id.take(8)))
         generationManager.enqueue(generationRequest)
@@ -265,6 +266,7 @@ class MainActivity : AppCompatActivity() {
                             completedAt = null,
                         )
                     }
+                    GenerationForegroundService.start(this)
                     generationManager.enqueue(task.toGenerationRequest(channel))
                     restoredCount++
                 } else {

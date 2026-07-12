@@ -25,6 +25,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AIImageBox"
         android:usesCleartextTraffic="true">
+        <service
+            android:name=".GenerationForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
