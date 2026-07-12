@@ -20,6 +20,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.widget.doAfterTextChanged
 import com.aiimagebox.R
 import com.aiimagebox.data.ProviderChannel
+import com.aiimagebox.generation.ReferenceMediaPolicy
 import com.aiimagebox.databinding.ViewStudioFormBinding
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
@@ -426,6 +427,18 @@ class StudioForm @JvmOverloads constructor(
         if (target == null) {
             setStatus(TEXT_STATUS_NO_CHANNEL)
             return null
+        }
+
+        if (referenceImagePath.isNotBlank()) {
+            val referenceKind = ReferenceMediaPolicy.kindForPath(referenceImagePath)
+            if (!ReferenceMediaPolicy.isSupportedByCurrentAdapters(referenceKind)) {
+                setStatus(when (referenceKind) {
+                    ReferenceMediaPolicy.Kind.MISSING -> context.getString(R.string.studio_reference_missing)
+                    ReferenceMediaPolicy.Kind.VIDEO -> context.getString(R.string.studio_reference_video_not_supported)
+                    else -> context.getString(R.string.studio_reference_unknown_not_supported)
+                })
+                return null
+            }
         }
 
         return StudioSubmitRequest(

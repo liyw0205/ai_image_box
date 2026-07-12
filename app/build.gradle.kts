@@ -11,8 +11,8 @@ android {
         applicationId = "com.aiimagebox"
         minSdk = 26
         targetSdk = 34
-        versionCode = 37
-        versionName = "0.8.6"
+        versionCode = 38
+        versionName = "0.8.7"
     }
 
     buildTypes {

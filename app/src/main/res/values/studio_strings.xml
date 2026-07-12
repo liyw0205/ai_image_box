@@ -28,7 +28,10 @@
     <string name="studio_reference_title">参考素材（可选）</string>
     <string name="studio_reference_empty">未选择参考素材。可选择图片或视频，具体能力由模型决定。</string>
     <string name="studio_reference_selected">已选择参考图。</string>
-    <string name="studio_reference_video_selected">已选择参考视频，将作为视频生成素材。</string>
+    <string name="studio_reference_video_selected">已选择参考视频，当前内置接口暂不支持直接提交。</string>
+    <string name="studio_reference_missing">参考素材文件已不存在，请重新选择。</string>
+    <string name="studio_reference_video_not_supported">当前内置接口仅支持图片参考素材，请改选图片或移除视频素材。</string>
+    <string name="studio_reference_unknown_not_supported">当前参考素材格式不受支持，请选择图片文件。</string>
     <string name="studio_reference_image">参考素材预览</string>
     <string name="action_pick_reference">选择素材</string>
     <string name="action_clear_reference">清除</string>
