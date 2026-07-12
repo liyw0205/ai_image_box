@@ -391,6 +391,7 @@ class MainActivity : AppCompatActivity() {
                 aspectRatio = request.aspectRatio,
                 resolution = imageSize(request.resolution, request.aspectRatio),
                 count = request.quantity,
+                durationSeconds = request.durationSeconds,
                 responseFormat = "b64_json",
                 referenceImagePaths = request.referenceImagePath
                     .takeIf { it.isNotBlank() }
@@ -1305,6 +1306,7 @@ class MainActivity : AppCompatActivity() {
             aspectRatio = parameters.optString("aspect_ratio", "1:1"),
             resolution = parameters.optString("resolution", "1024"),
             quantity = parameters.optInt("count", 1).coerceIn(1, 4),
+            durationSeconds = parameters.optInt("duration_seconds", 0).takeIf { it > 0 },
             draftReferenceImagePath = parameters.optJSONArray("reference_images")?.optString(0, "").orEmpty(),
         )
         binding.studioForm.setStatus(getString(R.string.history_reuse_applied, record.taskId.take(8)))

@@ -41,6 +41,7 @@ class StudioForm @JvmOverloads constructor(
     private var rememberedModel = stateStore.getString(KEY_SELECTED_MODEL, "").orEmpty()
     private var selectedTargetIndex = 0
     private var quantity = DEFAULT_QUANTITY
+    private var durationSeconds = DEFAULT_DURATION_SECONDS
     private var submitting = false
     private var referenceImagePath = ""
 
@@ -56,12 +57,15 @@ class StudioForm @JvmOverloads constructor(
         binding.studioNextTargetButton.setOnClickListener { showTargetPicker() }
         binding.studioQuantityMinus.setOnClickListener { setQuantity(quantity - 1) }
         binding.studioQuantityPlus.setOnClickListener { setQuantity(quantity + 1) }
+        binding.studioDurationMinus.setOnClickListener { setDuration(durationSeconds - DURATION_STEP_SECONDS) }
+        binding.studioDurationPlus.setOnClickListener { setDuration(durationSeconds + DURATION_STEP_SECONDS) }
         binding.studioSubmitButton.setOnClickListener { submitCurrentForm() }
         binding.studioSavePublicButton.setOnClickListener { onSavePublic?.invoke() }
         binding.studioPickReferenceButton.setOnClickListener { onPickReferenceImage?.invoke() }
         binding.studioClearReferenceButton.setOnClickListener { clearReferenceImage() }
 
         setQuantity(DEFAULT_QUANTITY)
+        setDuration(DEFAULT_DURATION_SECONDS)
         renderSelectedTarget()
         setStatus(TEXT_STATUS_WAITING)
         setResultPlaceholder(TEXT_RESULT_PLACEHOLDER)
@@ -282,6 +286,7 @@ class StudioForm @JvmOverloads constructor(
         aspectRatio: String,
         resolution: String,
         quantity: Int,
+        durationSeconds: Int? = null,
         draftReferenceImagePath: String = "",
     ) {
         setPrompt(prompt)
@@ -289,6 +294,7 @@ class StudioForm @JvmOverloads constructor(
         selectAspectRatio(aspectRatio)
         selectResolution(resolution)
         setQuantity(quantity)
+        durationSeconds?.let { setDuration(it) }
         if (draftReferenceImagePath.isNotBlank()) setReferenceMedia(draftReferenceImagePath)
         updateSubmitState()
     }
@@ -432,6 +438,7 @@ class StudioForm @JvmOverloads constructor(
             aspectRatio = selectedAspectRatio(),
             resolution = selectedResolution(),
             quantity = quantity,
+            durationSeconds = durationSeconds.takeIf { target.isVideo },
             timeoutSeconds = target.timeoutSeconds,
             proxy = target.proxy,
             referenceImagePath = referenceImagePath,
@@ -491,6 +498,7 @@ class StudioForm @JvmOverloads constructor(
         binding.studioChannelEndpoint.visibility = View.VISIBLE
         binding.studioChannelEndpoint.text = "接口：${target.baseUrl.ifBlank { "-" }}"
         binding.studioNextTargetButton.isEnabled = targetOptions.size > 1
+        binding.studioDurationRow.visibility = if (target.isVideo) View.VISIBLE else View.GONE
         if (remember) rememberSelectedTarget(target)
     }
 
@@ -505,6 +513,13 @@ class StudioForm @JvmOverloads constructor(
             .putString(KEY_SELECTED_CHANNEL_ID, target.channelId)
             .putString(KEY_SELECTED_MODEL, target.model)
             .commit()
+    }
+
+    private fun setDuration(nextDuration: Int) {
+        durationSeconds = nextDuration.coerceIn(MIN_DURATION_SECONDS, MAX_DURATION_SECONDS)
+        binding.studioDurationValue.text = context.getString(R.string.studio_duration_value, durationSeconds)
+        binding.studioDurationMinus.isEnabled = durationSeconds > MIN_DURATION_SECONDS
+        binding.studioDurationPlus.isEnabled = durationSeconds < MAX_DURATION_SECONDS
     }
 
     private fun setQuantity(nextQuantity: Int) {
@@ -636,6 +651,9 @@ class StudioForm @JvmOverloads constructor(
         return values
     }
 
+    private val StudioChannelTarget.isVideo: Boolean
+        get() = providerType.contains("video", ignoreCase = true)
+
     private fun StudioChannelTarget.typeLabel(): String {
         return when (providerType.trim()) {
             "openai_compatible_image" -> context.getString(R.string.model_type_openai_image)
@@ -709,6 +727,7 @@ class StudioForm @JvmOverloads constructor(
         val aspectRatio: String,
         val resolution: String,
         val quantity: Int,
+        val durationSeconds: Int? = null,
         val timeoutSeconds: Int,
         val proxy: String = "",
         val referenceImagePath: String = "",
@@ -716,6 +735,10 @@ class StudioForm @JvmOverloads constructor(
 
     companion object {
         private val VIDEO_EXTENSIONS = setOf("mp4", "m4v", "webm", "mov", "avi")
+        private const val MIN_DURATION_SECONDS = 1
+        private const val MAX_DURATION_SECONDS = 30
+        private const val DURATION_STEP_SECONDS = 1
+        private const val DEFAULT_DURATION_SECONDS = 5
         private const val MIN_QUANTITY = 1
         private const val MAX_QUANTITY = 4
         private const val MAX_GALLERY_ITEMS = 12

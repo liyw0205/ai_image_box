@@ -46,6 +46,10 @@
     <string name="studio_quantity_value">%1$d 张</string>
     <string name="studio_quantity_minus">减少</string>
     <string name="studio_quantity_plus">增加</string>
+    <string name="studio_duration_title">视频时长</string>
+    <string name="studio_duration_value">%1$d 秒</string>
+    <string name="studio_duration_minus">缩短视频时长</string>
+    <string name="studio_duration_plus">增加视频时长</string>
     <string name="studio_submit">开始生成</string>
     <string name="studio_submit_running">提交中</string>
     <string name="studio_status_title">状态</string>

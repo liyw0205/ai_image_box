@@ -351,6 +351,52 @@
         </HorizontalScrollView>
 
         <LinearLayout
+            android:id="@+id/studioDurationRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/studio_duration_title"
+                android:textColor="@color/aib_text_secondary"
+                android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/studioDurationMinus"
+                style="@style/Widget.AIImageBox.Button.Secondary"
+                android:layout_width="44dp"
+                android:layout_height="40dp"
+                android:contentDescription="@string/studio_duration_minus"
+                android:minWidth="44dp"
+                android:text="-" />
+
+            <TextView
+                android:id="@+id/studioDurationValue"
+                android:layout_width="72dp"
+                android:layout_height="40dp"
+                android:gravity="center"
+                android:textColor="@color/aib_text"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="5 秒" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/studioDurationPlus"
+                style="@style/Widget.AIImageBox.Button.Secondary"
+                android:layout_width="44dp"
+                android:layout_height="40dp"
+                android:contentDescription="@string/studio_duration_plus"
+                android:minWidth="44dp"
+                android:text="+" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/studioQuantityRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
