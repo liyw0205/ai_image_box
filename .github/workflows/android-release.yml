@@ -45,8 +45,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Run unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
+
+      - name: Verify APK metadata
+        run: AAPT="$ANDROID_HOME/build-tools/34.0.0/aapt" scripts/verify_apk_metadata.sh
 
       - name: Prepare release metadata
         id: meta
