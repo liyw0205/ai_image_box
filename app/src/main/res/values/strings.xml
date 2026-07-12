@@ -94,6 +94,8 @@
     <string name="action_copy">复制</string>
     <string name="action_delete">删除</string>
     <string name="action_reuse_parameters">复用参数</string>
+    <string name="action_reuse_filtered_latest">复用筛选首条</string>
+    <string name="history_filtered_reuse_empty">当前筛选结果为空，没有可复用记录。</string>
     <string name="action_view_detail">详情</string>
     <string name="action_save_public">保存到公共目录</string>
     <string name="action_cancel_task">取消</string>
@@ -142,8 +144,8 @@
     <string name="studio_generate_failed">生成失败：%1$s</string>
     <string name="studio_generate_cancelled">任务已取消：%1$s</string>
     <string name="studio_result_image">生成结果预览图</string>
-    <string name="reference_imported">参考图已添加，本次会按图生图提交。</string>
-    <string name="reference_import_failed">参考图导入失败。</string>
+    <string name="reference_imported">参考素材已添加，将按所选模型能力提交。</string>
+    <string name="reference_import_failed">参考素材导入失败，仅支持图片或视频文件。</string>
     <string name="export_no_files">没有可导出的结果文件。</string>
     <string name="export_failed">保存到公共目录失败。</string>
     <string name="export_succeeded">已保存 %1$d 个文件到公共目录：%2$s</string>
@@ -197,9 +199,9 @@
     <string name="history_filter_succeeded">成功</string>
     <string name="history_filter_failed">失败</string>
     <string name="history_filter_summary">显示 %1$d 条，共 %2$d 条生成记录。</string>
-    <string name="action_use_as_reference">作为参考图</string>
-    <string name="history_reference_missing">该记录没有可用的本地图片结果。</string>
-    <string name="history_reference_applied">已将任务 %1 的结果设为参考图。</string>
+    <string name="action_use_as_reference">作为参考素材</string>
+    <string name="history_reference_missing">该记录没有可用的本地结果素材。</string>
+    <string name="history_reference_applied">已将任务 %1$s 的结果设为参考素材。</string>
     <string name="history_search_hint">搜索 provider、模型或提示词</string>
     <string name="action_clear_cache">清理生成缓存</string>
     <string name="cache_clear_done">已清理 %1 个缓存文件，配置和历史记录未删除。</string>

@@ -198,6 +198,7 @@ class MainActivity : AppCompatActivity() {
                 Tab.CHANNELS -> showChannelDialog(null)
                 Tab.TASKS -> clearFinishedTasks()
                 Tab.AGENTS -> showAgentDialog(null)
+                Tab.HISTORY -> reuseLatestFilteredHistory()
                 else -> Toast.makeText(this, getString(R.string.toast_next_milestone), Toast.LENGTH_SHORT).show()
             }
         }
@@ -226,7 +227,7 @@ class MainActivity : AppCompatActivity() {
         binding.headline.text = getString(tab.headlineRes)
         binding.body.text = getString(tab.bodyRes)
         binding.statusText.text = getString(tab.statusRes)
-        binding.primaryAction.text = getString(tab.primaryActionRes)
+        binding.primaryAction.text = getString(if (tab == Tab.HISTORY) R.string.action_reuse_filtered_latest else tab.primaryActionRes)
         binding.secondaryAction.visibility = if (tab == Tab.CHANNELS || tab == Tab.AGENTS || tab == Tab.HISTORY) View.VISIBLE else View.GONE
         binding.secondaryAction.text = getString(when (tab) { Tab.AGENTS -> R.string.action_reset_agents; Tab.HISTORY -> R.string.action_diagnostics; else -> R.string.action_refresh_channels })
         binding.channelPanel.visibility = if (tab == Tab.CHANNELS) View.VISIBLE else View.GONE
@@ -249,7 +250,7 @@ class MainActivity : AppCompatActivity() {
             exportPathsToPublic(latestResultPaths)
         }
         binding.studioForm.setOnPickReferenceImageListener {
-            referenceImagePicker.launch("image/*")
+            referenceImagePicker.launch("*/*")
         }
     }
 
@@ -829,7 +830,8 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val imported = withContext(Dispatchers.IO) {
                 runCatching {
-                    val mimeType = contentResolver.getType(uri).orEmpty().ifBlank { "image/png" }
+                    val mimeType = contentResolver.getType(uri).orEmpty().ifBlank { "application/octet-stream" }
+                    require(mimeType.startsWith("image/") || mimeType.startsWith("video/"))
                     val target = File(
                         appDirectories.requestImages,
                         "reference_${System.currentTimeMillis()}.${extensionForMime(mimeType)}",
@@ -843,7 +845,7 @@ class MainActivity : AppCompatActivity() {
             if (imported == null) {
                 Toast.makeText(this@MainActivity, R.string.reference_import_failed, Toast.LENGTH_SHORT).show()
             } else {
-                binding.studioForm.setReferenceImage(imported)
+                binding.studioForm.setReferenceMedia(imported)
                 binding.studioForm.setStatus(getString(R.string.reference_imported))
             }
         }
@@ -1113,10 +1115,23 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun filteredHistoryRecords(allRecords: List<GenerationRecord> = generationStore.listRecentRecords(500)): List<GenerationRecord> {
+        val query = binding.historySearch?.text?.toString()?.trim().orEmpty()
+        return allRecords.filter { historyFilter.matches(it) && historyTimeFilter.matches(it) && it.matchesHistoryQuery(query) }
+    }
+
+    private fun reuseLatestFilteredHistory() {
+        val record = filteredHistoryRecords().firstOrNull()
+        if (record == null) {
+            Toast.makeText(this, R.string.history_filtered_reuse_empty, Toast.LENGTH_SHORT).show()
+        } else {
+            reuseHistoryRecord(record)
+        }
+    }
+
     private fun renderHistoryPanel() {
         val allRecords = generationStore.listRecentRecords(500)
-        val query = binding.historySearch?.text?.toString()?.trim().orEmpty()
-        val records = allRecords.filter { historyFilter.matches(it) && historyTimeFilter.matches(it) && it.matchesHistoryQuery(query) }.take(100)
+        val records = filteredHistoryRecords(allRecords).take(100)
         val cacheBytes = DiagnosticsExporter.directorySize(appDirectories.cache)
         binding.historySummary.text = getString(R.string.history_filter_summary_with_cache, records.size, allRecords.size, formatBytes(cacheBytes))
         binding.historyEmpty.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
@@ -1296,15 +1311,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun useRecordAsReference(record: GenerationRecord) {
-        val imagePath = record.assets.firstOrNull { asset ->
-            asset.mode == StoredGenerationMode.IMAGE && File(asset.media.filePath).isFile
-        }?.media?.filePath
-        if (imagePath.isNullOrBlank()) {
+        val referencePath = record.assets.firstOrNull { asset -> File(asset.media.filePath).isFile }?.media?.filePath
+        if (referencePath.isNullOrBlank()) {
             Toast.makeText(this, R.string.history_reference_missing, Toast.LENGTH_SHORT).show()
             return
         }
         reuseHistoryRecord(record)
-        binding.studioForm.setReferenceImage(imagePath)
+        binding.studioForm.setReferenceMedia(referencePath)
         binding.studioForm.setStatus(getString(R.string.history_reference_applied, record.taskId.take(8)))
     }
 

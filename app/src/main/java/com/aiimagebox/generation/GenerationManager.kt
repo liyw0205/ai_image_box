@@ -159,6 +159,10 @@ class ProviderRegistryGenerationExecutor(
             "jpg", "jpeg" -> "image/jpeg"
             "webp" -> "image/webp"
             "gif" -> "image/gif"
+            "mp4", "m4v" -> "video/mp4"
+            "webm" -> "video/webm"
+            "mov" -> "video/quicktime"
+            "avi" -> "video/x-msvideo"
             else -> "image/png"
         }
     }

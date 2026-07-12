@@ -289,7 +289,7 @@ class StudioForm @JvmOverloads constructor(
         selectAspectRatio(aspectRatio)
         selectResolution(resolution)
         setQuantity(quantity)
-        if (draftReferenceImagePath.isNotBlank()) setReferenceImage(draftReferenceImagePath)
+        if (draftReferenceImagePath.isNotBlank()) setReferenceMedia(draftReferenceImagePath)
         updateSubmitState()
     }
 
@@ -307,13 +307,15 @@ class StudioForm @JvmOverloads constructor(
         binding.studioStatusBody.text = message
     }
 
-    fun setReferenceImage(filePath: String) {
+    fun setReferenceMedia(filePath: String) {
         referenceImagePath = filePath.trim()
         val bitmap = decodePreview(referenceImagePath, dp(420))
         if (bitmap != null) {
             binding.studioReferenceImage.setImageBitmap(bitmap)
             binding.studioReferenceImage.visibility = View.VISIBLE
-            binding.studioReferenceStatus.text = context.getString(R.string.studio_reference_selected)
+            binding.studioReferenceStatus.text = context.getString(
+                if (isVideoPath(referenceImagePath)) R.string.studio_reference_video_selected else R.string.studio_reference_selected,
+            )
             binding.studioClearReferenceButton.visibility = View.VISIBLE
         } else {
             clearReferenceImage()
@@ -562,8 +564,12 @@ class StudioForm @JvmOverloads constructor(
         binding.studioResolutionGroup.check(buttonId)
     }
 
+    private fun isVideoPath(filePath: String): Boolean {
+        return filePath.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS
+    }
+
     private fun decodePreview(filePath: String, maxSidePx: Int): android.graphics.Bitmap? {
-        if (filePath.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS) {
+        if (isVideoPath(filePath)) {
             val retriever = MediaMetadataRetriever()
             return try {
                 retriever.setDataSource(filePath)

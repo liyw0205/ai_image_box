@@ -25,11 +25,12 @@
     <string name="studio_channel_provider_format">类型：%1$s</string>
     <string name="studio_channel_endpoint_format">接口：%1$s</string>
     <string name="studio_channel_model_unknown">未指定模型</string>
-    <string name="studio_reference_title">参考图（可选）</string>
-    <string name="studio_reference_empty">未选择参考图。选择后会按图生图提交。</string>
-    <string name="studio_reference_selected">已选择参考图，本次按图生图提交。</string>
-    <string name="studio_reference_image">参考图预览</string>
-    <string name="action_pick_reference">选择图片</string>
+    <string name="studio_reference_title">参考素材（可选）</string>
+    <string name="studio_reference_empty">未选择参考素材。可选择图片或视频，具体能力由模型决定。</string>
+    <string name="studio_reference_selected">已选择参考图。</string>
+    <string name="studio_reference_video_selected">已选择参考视频，将作为视频生成素材。</string>
+    <string name="studio_reference_image">参考素材预览</string>
+    <string name="action_pick_reference">选择素材</string>
     <string name="action_clear_reference">清除</string>
     <string name="studio_settings_title">生成参数</string>
     <string name="studio_aspect_title">比例</string>
