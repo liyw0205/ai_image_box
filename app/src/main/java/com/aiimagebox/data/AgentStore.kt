@@ -38,6 +38,8 @@ class AgentStore(appDirectories: AppDirectories) {
         )
     }
 
+    fun reset(): List<AgentDefinition> = defaults().also(::save)
+
     private fun defaults(): List<AgentDefinition> = listOf(
         AgentDefinition(type = "prompt_enhancer", name = "提示词增强", stage = AgentStage.PRE_REQUEST, enabled = false, order = 10),
         AgentDefinition(type = "reference_analyzer", name = "参考图分析", stage = AgentStage.PRE_REQUEST, enabled = true, order = 20),

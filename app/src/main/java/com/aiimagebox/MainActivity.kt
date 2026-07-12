@@ -29,6 +29,7 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import com.aiimagebox.databinding.ActivityMainBinding
 import com.aiimagebox.data.AppDirectories
+import com.aiimagebox.data.AgentStore
 import com.aiimagebox.data.ChannelStore
 import com.aiimagebox.data.AttemptRecord as StoredAttemptRecord
 import com.aiimagebox.data.GeneratedAsset as StoredGeneratedAsset
@@ -41,6 +42,8 @@ import com.aiimagebox.data.MediaReference as StoredMediaReference
 import com.aiimagebox.data.ProviderChannel
 import com.aiimagebox.data.SecureKeyStore
 import com.aiimagebox.generation.GenerationEvent
+import com.aiimagebox.generation.AgentDefinition
+import com.aiimagebox.generation.AgentStage
 import com.aiimagebox.generation.GenerationAttemptSummary
 import com.aiimagebox.generation.GenerationManager
 import com.aiimagebox.generation.GenerationParameters
@@ -73,6 +76,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var appDirectories: AppDirectories
     private lateinit var channelStore: ChannelStore
+    private lateinit var agentStore: AgentStore
     private lateinit var generationStore: GenerationStore
     private lateinit var generationManager: GenerationManager
     private var currentTab: Tab = Tab.STUDIO
@@ -89,6 +93,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         appDirectories = (application as AIImageBoxApp).appDirectories
         channelStore = (application as AIImageBoxApp).channelStore
+        agentStore = (application as AIImageBoxApp).agentStore
         generationStore = (application as AIImageBoxApp).generationStore
         generationManager = (application as AIImageBoxApp).generationManager
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -145,12 +150,15 @@ class MainActivity : AppCompatActivity() {
             when (currentTab) {
                 Tab.CHANNELS -> showChannelDialog(null)
                 Tab.TASKS -> clearFinishedTasks()
+                Tab.AGENTS -> showAgentDialog(null)
                 else -> Toast.makeText(this, getString(R.string.toast_next_milestone), Toast.LENGTH_SHORT).show()
             }
         }
         binding.secondaryAction.setOnClickListener {
             if (currentTab == Tab.CHANNELS) {
                 renderChannelList()
+            } else if (currentTab == Tab.AGENTS) {
+                resetAgents()
             } else {
                 Toast.makeText(this, getString(R.string.toast_provider_coming), Toast.LENGTH_SHORT).show()
             }
@@ -170,9 +178,10 @@ class MainActivity : AppCompatActivity() {
         binding.body.text = getString(tab.bodyRes)
         binding.statusText.text = getString(tab.statusRes)
         binding.primaryAction.text = getString(tab.primaryActionRes)
-        binding.secondaryAction.visibility = if (tab == Tab.CHANNELS) View.VISIBLE else View.GONE
-        binding.secondaryAction.text = getString(R.string.action_refresh_channels)
+        binding.secondaryAction.visibility = if (tab == Tab.CHANNELS || tab == Tab.AGENTS) View.VISIBLE else View.GONE
+        binding.secondaryAction.text = getString(if (tab == Tab.AGENTS) R.string.action_reset_agents else R.string.action_refresh_channels)
         binding.channelPanel.visibility = if (tab == Tab.CHANNELS) View.VISIBLE else View.GONE
+        requireNotNull(binding.agentPanel).visibility = if (tab == Tab.AGENTS) View.VISIBLE else View.GONE
         binding.studioForm.visibility = if (tab == Tab.STUDIO) View.VISIBLE else View.GONE
         binding.taskPanel.visibility = if (tab == Tab.TASKS) View.VISIBLE else View.GONE
         binding.historyPanel.visibility = if (tab == Tab.HISTORY) View.VISIBLE else View.GONE
@@ -180,6 +189,7 @@ class MainActivity : AppCompatActivity() {
         if (tab == Tab.TASKS) renderTaskPanel()
         if (tab == Tab.HISTORY) renderHistoryPanel()
         if (tab == Tab.CHANNELS) renderChannelList()
+        if (tab == Tab.AGENTS) renderAgentList()
     }
 
     private fun wireStudioForm() {
@@ -192,6 +202,122 @@ class MainActivity : AppCompatActivity() {
         binding.studioForm.setOnPickReferenceImageListener {
             referenceImagePicker.launch("image/*")
         }
+    }
+
+    private fun renderAgentList() {
+        val agents = agentStore.load().sortedWith(compareBy<AgentDefinition> { it.order }.thenBy { it.id })
+        requireNotNull(binding.agentSummary).text = getString(R.string.agent_summary, agents.size, agents.count { it.enabled })
+        requireNotNull(binding.agentEmpty).visibility = if (agents.isEmpty()) View.VISIBLE else View.GONE
+        val agentList = requireNotNull(binding.agentList)
+        agentList.removeAllViews()
+        agents.forEachIndexed { index, agent ->
+            agentList.addView(agentCard(agent, index, agents.lastIndex))
+        }
+    }
+
+    private fun agentCard(agent: AgentDefinition, index: Int, lastIndex: Int): View {
+        val detail = getString(
+            R.string.agent_card_detail,
+            agent.type,
+            if (agent.stage == AgentStage.PRE_REQUEST) getString(R.string.agent_stage_pre) else getString(R.string.agent_stage_post),
+            agent.order,
+            if (agent.enabled) getString(R.string.agent_enabled) else getString(R.string.agent_disabled),
+            JSONObject(agent.config).toString(),
+        )
+        val card = simpleCard(agent.name.ifBlank { agent.type }, detail) as MaterialCardView
+        val content = card.getChildAt(0) as LinearLayout
+        content.apply {
+            content.addView(
+                actionGrid(
+                    listOf(
+                        UiAction(R.string.action_edit) { showAgentDialog(agent) },
+                        UiAction(if (agent.enabled) R.string.action_disable else R.string.action_enable) { toggleAgent(agent) },
+                        UiAction(R.string.action_move_up) { moveAgent(agent, -1) },
+                        UiAction(R.string.action_move_down) { moveAgent(agent, 1) },
+                        UiAction(R.string.action_delete) { deleteAgent(agent) },
+                    ).filterIndexed { actionIndex, _ ->
+                        when (actionIndex) {
+                            2 -> index > 0
+                            3 -> index < lastIndex
+                            else -> true
+                        }
+                    },
+                ),
+            )
+        }
+        return card
+    }
+
+    private fun toggleAgent(agent: AgentDefinition) {
+        agentStore.save(agentStore.load().map { if (it.id == agent.id) it.copy(enabled = !it.enabled) else it })
+        renderAgentList()
+    }
+
+    private fun moveAgent(agent: AgentDefinition, delta: Int) {
+        val agents = agentStore.load().sortedWith(compareBy<AgentDefinition> { it.order }.thenBy { it.id }).toMutableList()
+        val from = agents.indexOfFirst { it.id == agent.id }
+        val to = (from + delta).coerceIn(0, agents.lastIndex)
+        if (from < 0 || from == to) return
+        val moved = agents.removeAt(from)
+        agents.add(to, moved)
+        agentStore.save(agents.mapIndexed { position, item -> item.copy(order = (position + 1) * 10) })
+        renderAgentList()
+    }
+
+    private fun deleteAgent(agent: AgentDefinition) {
+        agentStore.save(agentStore.load().filterNot { it.id == agent.id })
+        renderAgentList()
+    }
+
+    private fun resetAgents() {
+        agentStore.reset()
+        renderAgentList()
+        Toast.makeText(this, R.string.agent_reset_done, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showAgentDialog(existing: AgentDefinition?) {
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        fun field(hint: Int, value: String = ""): EditText = EditText(this).apply {
+            setHint(hint); setText(value); content.addView(this)
+        }
+        val name = field(R.string.field_agent_name, existing?.name.orEmpty())
+        val type = field(R.string.field_agent_type, existing?.type.orEmpty())
+        val stage = field(R.string.field_agent_stage, existing?.stage?.wireName ?: AgentStage.PRE_REQUEST.wireName)
+        val order = field(R.string.field_agent_order, existing?.order?.toString() ?: ((agentStore.load().size + 1) * 10).toString()).apply { inputType = InputType.TYPE_CLASS_NUMBER }
+        val config = field(R.string.field_agent_config, JSONObject(existing?.config.orEmpty()).toString())
+        val enabled = CheckBox(this).apply { text = getString(R.string.field_enabled); isChecked = existing?.enabled ?: true; content.addView(this) }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(if (existing == null) R.string.agent_add_title else R.string.agent_edit_title)
+            .setView(content)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.action_save, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener agentSave@{
+                val cleanType = type.text.toString().trim()
+                val cleanName = name.text.toString().trim()
+                val stageValue = AgentStage.values().firstOrNull { it.wireName == stage.text.toString().trim() }
+                val configObject = runCatching { JSONObject(config.text.toString().trim().ifBlank { "{}" }) }.getOrNull()
+                if (cleanType.isBlank() || cleanName.isBlank() || stageValue == null || configObject == null) {
+                    Toast.makeText(this, R.string.agent_invalid, Toast.LENGTH_SHORT).show()
+                    return@agentSave
+                }
+                val configMap = buildMap<String, String> { val keys = configObject.keys(); while (keys.hasNext()) { val key = keys.next(); put(key, configObject.optString(key, "")) } }
+                val saved = AgentDefinition(
+                    id = existing?.id ?: java.util.UUID.randomUUID().toString(),
+                    type = cleanType,
+                    name = cleanName,
+                    stage = stageValue,
+                    enabled = enabled.isChecked,
+                    order = order.text.toString().toIntOrNull() ?: 10,
+                    config = configMap,
+                )
+                agentStore.save(agentStore.load().filterNot { it.id == saved.id } + saved)
+                dialog.dismiss()
+                renderAgentList()
+            }
+        }
+        dialog.show()
     }
 
     private fun bindStudioChannels() {
@@ -2333,6 +2459,15 @@ class MainActivity : AppCompatActivity() {
             R.string.channels_body,
             R.string.channels_status,
             R.string.action_add_channel,
+        ),
+        AGENTS(
+            R.id.nav_agents,
+            R.string.tab_agents,
+            R.string.badge_agents,
+            R.string.agents_headline,
+            R.string.agents_body,
+            R.string.agents_status,
+            R.string.action_add_agent,
         );
 
         companion object {

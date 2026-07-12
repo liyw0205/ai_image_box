@@ -16,5 +16,9 @@
         android:id="@+id/nav_channels"
         android:icon="@android:drawable/ic_menu_manage"
         android:title="@string/tab_channels" />
+    <item
+        android:id="@+id/nav_agents"
+        android:icon="@android:drawable/ic_menu_sort_by_size"
+        android:title="@string/tab_agents" />
 </menu>
 

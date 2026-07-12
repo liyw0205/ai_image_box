@@ -275,6 +275,38 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical" />
             </LinearLayout>
+            <LinearLayout
+                android:id="@+id/agentPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/agentSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/aib_text_secondary"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/agentEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@color/aib_surface2"
+                    android:padding="14dp"
+                    android:text="@string/agent_empty"
+                    android:textColor="@color/aib_text_secondary" />
+
+                <LinearLayout
+                    android:id="@+id/agentList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
         </LinearLayout>
     </ScrollView>
 

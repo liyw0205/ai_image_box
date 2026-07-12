@@ -218,7 +218,36 @@
     <string name="asset_detail_exists">文件存在：%1</string>
     <string name="asset_detail_path">路径：%1</string>
     <string name="asset_detail_metadata">元数据：
-%1</string>
+%1$s</string>
     <string name="yes">是</string>
     <string name="no">否</string>
+    <string name="tab_agents">代理</string>
+    <string name="badge_agents">生成前后处理流水线</string>
+    <string name="agents_headline">子代理流水线配置</string>
+    <string name="agents_body">配置提示词增强、参考图分析、审核和元数据写入代理；支持新增、编辑、启停和排序。</string>
+    <string name="agents_status">代理配置保存到 agents.json，每次执行耗时、输出和错误会写入生成结果元数据。</string>
+    <string name="action_add_agent">新增代理</string>
+    <string name="action_reset_agents">恢复默认</string>
+    <string name="agent_empty">暂无子代理配置。</string>
+    <string name="agent_summary">共 %1$d 个代理，已启用 %2$d 个。</string>
+    <string name="agent_card_detail">类型：%1$s
+阶段：%2$s
+顺序：%3$d
+状态：%4$s
+配置：%5$s</string>
+    <string name="agent_stage_pre">生成前</string>
+    <string name="agent_stage_post">生成后</string>
+    <string name="agent_enabled">已启用</string>
+    <string name="agent_disabled">已禁用</string>
+    <string name="action_move_up">上移</string>
+    <string name="action_move_down">下移</string>
+    <string name="agent_reset_done">已恢复默认代理配置。</string>
+    <string name="field_agent_name">代理名称</string>
+    <string name="field_agent_type">代理类型</string>
+    <string name="field_agent_stage">阶段：pre_request 或 post_result</string>
+    <string name="field_agent_order">执行顺序</string>
+    <string name="field_agent_config">配置 JSON</string>
+    <string name="agent_add_title">新增子代理</string>
+    <string name="agent_edit_title">编辑子代理</string>
+    <string name="agent_invalid">请检查名称、类型、阶段和配置 JSON。</string>
 </resources>
