@@ -10,6 +10,7 @@ data class AppDirectories(
     val requestImages: File,
     val generatedImages: File,
     val generatedVideos: File,
+    val generatedThumbnails: File,
     val responseBodies: File,
     val diagnostics: File,
 ) {
@@ -24,6 +25,7 @@ data class AppDirectories(
                 requestImages = File(root, "cache/request_images"),
                 generatedImages = File(root, "cache/generated_images"),
                 generatedVideos = File(root, "cache/generated_videos"),
+                generatedThumbnails = File(root, "cache/generated_thumbnails"),
                 responseBodies = File(root, "cache/response_bodies"),
                 diagnostics = File(root, "diagnostics"),
             )
@@ -35,6 +37,7 @@ data class AppDirectories(
                 dirs.requestImages,
                 dirs.generatedImages,
                 dirs.generatedVideos,
+                dirs.generatedThumbnails,
                 dirs.responseBodies,
                 dirs.diagnostics,
             ).forEach { it.mkdirs() }

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.graphics.Typeface
 import android.os.Build
@@ -412,7 +413,12 @@ class MainActivity : AppCompatActivity() {
             val targetDir = if (videoAsset) appDirectories.generatedVideos else appDirectories.generatedImages
             val file = File(targetDir, "${filePrefix}_${savedAt}_${request.id.take(8)}$suffix.$ext")
             file.writeBytes(generatedAsset.bytes)
-            val dimensions = if (videoAsset) null to null else imageDimensions(file)
+            val videoMetadata = if (videoAsset) extractVideoMetadata(file) else null
+            val dimensions = videoMetadata?.let { it.width to it.height } ?: imageDimensions(file)
+            val assetMetadata = JSONObject(generatedAsset.metadata.ifEmpty { result.metadata })
+            videoMetadata?.thumbnailPath?.takeIf { it.isNotBlank() }?.let {
+                assetMetadata.put("thumbnail_path", it)
+            }
             StoredGeneratedAsset(
                 mode = if (videoAsset) StoredGenerationMode.VIDEO else StoredGenerationMode.IMAGE,
                 media = StoredMediaReference(
@@ -422,12 +428,13 @@ class MainActivity : AppCompatActivity() {
                     sizeBytes = generatedAsset.bytes.size.toLong(),
                     width = dimensions.first,
                     height = dimensions.second,
+                    durationMs = videoMetadata?.durationMs,
                 ),
                 channelId = resultChannelId,
                 channelName = resultChannelName,
                 providerType = resultProviderType,
                 model = resultModel,
-                metadataJson = JSONObject(generatedAsset.metadata.ifEmpty { result.metadata }).toString(),
+                metadataJson = assetMetadata.toString(),
             )
         }
         val updated = generationStore.updateTask(request.id) {
@@ -658,6 +665,28 @@ class MainActivity : AppCompatActivity() {
         val width = options.outWidth.takeIf { it > 0 }
         val height = options.outHeight.takeIf { it > 0 }
         return width to height
+    }
+
+    private fun extractVideoMetadata(file: File): VideoMetadata? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(file.absolutePath)
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull()
+            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull()
+            val frame = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            val thumbnailPath = frame?.let { bitmap ->
+                val target = File(appDirectories.generatedThumbnails, "${file.nameWithoutExtension}.jpg")
+                target.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 88, it) }
+                bitmap.recycle()
+                target.absolutePath
+            }.orEmpty()
+            VideoMetadata(durationMs, width, height, thumbnailPath)
+        } catch (_: RuntimeException) {
+            null
+        } finally {
+            retriever.release()
+        }
     }
 
     private fun decodeThumbnail(filePath: String, maxSidePx: Int): Bitmap? {
@@ -938,7 +967,13 @@ class MainActivity : AppCompatActivity() {
     private fun thumbnailView(filePath: String): ImageView? {
         val file = File(filePath)
         if (!file.isFile) return null
-        val bitmap = decodeThumbnail(file.absolutePath, dp(420)) ?: return null
+        val previewPath = if (isVideoPath(file.absolutePath)) {
+            File(appDirectories.generatedThumbnails, "${file.nameWithoutExtension}.jpg")
+                .takeIf { it.isFile }?.absolutePath ?: file.absolutePath
+        } else {
+            file.absolutePath
+        }
+        val bitmap = decodeThumbnail(previewPath, dp(420)) ?: return null
         return ImageView(this).apply {
             setImageBitmap(bitmap)
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -1049,12 +1084,25 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     "-"
                 }
-                "${media.displayName.ifBlank { media.filePath }}\n${media.mimeType} · $dimensions · $size\n${media.filePath}"
+                val duration = media.durationMs?.let { formatDuration(it) } ?: "-"
+                "${media.displayName.ifBlank { media.filePath }}\n${media.mimeType} · $dimensions · $duration · $size\n${media.filePath}"
             }
             .take(5)
             .joinToString("\n\n")
             .ifBlank { "-" }
     }
+
+    private fun formatDuration(durationMs: Long): String {
+        val totalSeconds = (durationMs / 1000).coerceAtLeast(0)
+        return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+    }
+
+    private data class VideoMetadata(
+        val durationMs: Long?,
+        val width: Int?,
+        val height: Int?,
+        val thumbnailPath: String,
+    )
 
     private fun StoredGenerationStatus.displayName(): String {
         return when (this) {

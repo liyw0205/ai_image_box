@@ -3,6 +3,7 @@ package com.aiimagebox.ui
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.graphics.Typeface
 import android.text.InputType
 import android.util.AttributeSet
@@ -562,6 +563,17 @@ class StudioForm @JvmOverloads constructor(
     }
 
     private fun decodePreview(filePath: String, maxSidePx: Int): android.graphics.Bitmap? {
+        if (filePath.substringAfterLast('.', "").lowercase() in VIDEO_EXTENSIONS) {
+            val retriever = MediaMetadataRetriever()
+            return try {
+                retriever.setDataSource(filePath)
+                retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            } catch (_: RuntimeException) {
+                null
+            } finally {
+                retriever.release()
+            }
+        }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(filePath, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
@@ -697,6 +709,7 @@ class StudioForm @JvmOverloads constructor(
     )
 
     companion object {
+        private val VIDEO_EXTENSIONS = setOf("mp4", "m4v", "webm", "mov", "avi")
         private const val MIN_QUANTITY = 1
         private const val MAX_QUANTITY = 4
         private const val MAX_GALLERY_ITEMS = 12
