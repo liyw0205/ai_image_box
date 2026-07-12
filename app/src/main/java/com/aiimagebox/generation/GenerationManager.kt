@@ -293,6 +293,11 @@ class ProviderRegistryGenerationExecutor(
             if (attempts.isNotEmpty()) put("attempts", attempts.toJson().toString())
         }
         val assets = images.mapIndexed { index, asset ->
+            GeneratedAssetIntegrity.requireValid(
+                bytes = asset.bytes,
+                declaredMimeType = asset.mimeType.ifBlank { "image/png" },
+                expectedKind = GeneratedAssetIntegrity.MediaKind.IMAGE,
+            )
             GenerationAsset(
                 bytes = asset.bytes,
                 mimeType = asset.mimeType.ifBlank { "image/png" },
@@ -306,6 +311,11 @@ class ProviderRegistryGenerationExecutor(
                 },
             )
         } + videos.mapIndexed { index, asset ->
+            GeneratedAssetIntegrity.requireValid(
+                bytes = asset.bytes,
+                declaredMimeType = asset.mimeType.ifBlank { "video/mp4" },
+                expectedKind = GeneratedAssetIntegrity.MediaKind.VIDEO,
+            )
             GenerationAsset(
                 bytes = asset.bytes,
                 mimeType = asset.mimeType.ifBlank { "video/mp4" },

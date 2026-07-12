@@ -2,6 +2,7 @@ package com.aiimagebox.provider
 
 import com.aiimagebox.data.ModelTarget
 import com.aiimagebox.data.ProviderChannel
+import com.aiimagebox.generation.GeneratedAssetIntegrity
 import com.aiimagebox.data.SecureKeyStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -362,6 +363,7 @@ class GenericAsyncVideoAdapter(
             if (!mimeType.startsWith("video/") && mimeType != "application/vnd.apple.mpegurl") {
                 throw IllegalStateException("Downloaded content is not a video")
             }
+            GeneratedAssetIntegrity.requireValid(bytes, mimeType, GeneratedAssetIntegrity.MediaKind.VIDEO)
             return GeneratedAsset(bytes = bytes, mimeType = mimeType, source = GeneratedAssetSource.URL, remoteUrl = videoUrl)
         }
     }

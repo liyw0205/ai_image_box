@@ -3,6 +3,7 @@ package com.aiimagebox.provider
 import android.util.Base64
 import com.aiimagebox.data.ModelTarget
 import com.aiimagebox.data.ProviderChannel
+import com.aiimagebox.generation.GeneratedAssetIntegrity
 import com.aiimagebox.data.SecureKeyStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -309,6 +310,7 @@ abstract class JsonImageAdapter(
             val contentType = response.header("Content-Type").orEmpty().substringBefore(';').trim()
             val mimeType = ResponseParser.guessImageMimeType(bytes, contentType)
             if (!mimeType.startsWith("image/")) throw IllegalStateException("Downloaded content is not an image")
+            GeneratedAssetIntegrity.requireValid(bytes, mimeType, GeneratedAssetIntegrity.MediaKind.IMAGE)
             return GeneratedAsset(
                 bytes = bytes,
                 mimeType = mimeType,

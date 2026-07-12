@@ -2,6 +2,7 @@ package com.aiimagebox.provider
 
 import com.aiimagebox.data.ModelTarget
 import com.aiimagebox.data.ProviderChannel
+import com.aiimagebox.generation.GeneratedAssetIntegrity
 import com.aiimagebox.data.SecureKeyStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -342,6 +343,7 @@ class OpenAICompatibleImageAdapter(
             val contentType = response.header("Content-Type").orEmpty().substringBefore(';').trim()
             val mimeType = ResponseParser.guessImageMimeType(bytes, contentType)
             if (!mimeType.startsWith("image/")) throw IllegalStateException("Downloaded content is not an image")
+            GeneratedAssetIntegrity.requireValid(bytes, mimeType, GeneratedAssetIntegrity.MediaKind.IMAGE)
             return GeneratedAsset(
                 bytes = bytes,
                 mimeType = mimeType,

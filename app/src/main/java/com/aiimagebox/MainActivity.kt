@@ -48,6 +48,7 @@ import com.aiimagebox.generation.AgentDefinition
 import com.aiimagebox.generation.AgentStage
 import com.aiimagebox.generation.GenerationAttemptSummary
 import com.aiimagebox.generation.GenerationManager
+import com.aiimagebox.generation.GeneratedAssetIntegrity
 import com.aiimagebox.generation.GenerationParameters
 import com.aiimagebox.generation.GenerationProviderException
 import com.aiimagebox.generation.GenerationQueueItem
@@ -608,7 +609,21 @@ class MainActivity : AppCompatActivity() {
             val filePrefix = if (videoAsset) "video" else "image"
             val targetDir = if (videoAsset) appDirectories.generatedVideos else appDirectories.generatedImages
             val file = File(targetDir, "${filePrefix}_${savedAt}_${request.id.take(8)}$suffix.$ext")
+            GeneratedAssetIntegrity.requireValid(
+                bytes = generatedAsset.bytes,
+                declaredMimeType = generatedAsset.mimeType,
+                expectedKind = if (videoAsset) GeneratedAssetIntegrity.MediaKind.VIDEO else GeneratedAssetIntegrity.MediaKind.IMAGE,
+            )
             file.writeBytes(generatedAsset.bytes)
+            val integrity = GeneratedAssetIntegrity.validateFile(
+                file = file,
+                declaredMimeType = generatedAsset.mimeType,
+                expectedKind = if (videoAsset) GeneratedAssetIntegrity.MediaKind.VIDEO else GeneratedAssetIntegrity.MediaKind.IMAGE,
+            )
+            if (!integrity.valid) {
+                file.delete()
+                error("生成结果完整性校验失败：${integrity.reason}")
+            }
             val videoMetadata = if (videoAsset) extractVideoMetadata(file) else null
             val dimensions = videoMetadata?.let { it.width to it.height } ?: imageDimensions(file)
             val assetMetadata = JSONObject(generatedAsset.metadata.ifEmpty { result.metadata })
@@ -1309,11 +1324,7 @@ class MainActivity : AppCompatActivity() {
                 record.assets.size,
                 filePath,
                 record.errorMessage.ifBlank {
-                    if (record.assets.any { !File(it.media.filePath).isFile }) {
-                        getString(R.string.history_file_missing)
-                    } else {
-                        "-"
-                    }
+                    record.assets.mapNotNull { historyAssetIntegrityError(it) }.firstOrNull() ?: "-"
                 },
             )
             setTextColor(color(R.color.aib_text_secondary))
@@ -1341,6 +1352,16 @@ class MainActivity : AppCompatActivity() {
         )
         card.addView(content)
         return card
+    }
+
+    private fun historyAssetIntegrityError(asset: StoredGeneratedAsset): String? {
+        val expectedKind = if (asset.mode == StoredGenerationMode.VIDEO) {
+            GeneratedAssetIntegrity.MediaKind.VIDEO
+        } else {
+            GeneratedAssetIntegrity.MediaKind.IMAGE
+        }
+        val verdict = GeneratedAssetIntegrity.validateFile(File(asset.media.filePath), asset.media.mimeType, expectedKind)
+        return verdict.reason.takeIf { !verdict.valid }
     }
 
     private fun thumbnailView(filePath: String): ImageView? {

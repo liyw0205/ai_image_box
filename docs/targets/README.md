@@ -9,10 +9,11 @@
 | 03 | `03_video_contract_mock_regression.md` | 已完成（0.8.9） | 视频接口 Mock 回归 |
 | 04 | `04_channel_template_validation.md` | 已完成（0.8.10） | 渠道模板本地校验 |
 | 05 | `05_release_regression_evidence.md` | 已完成（0.8.11） | 发布与设备回归证据 |
-| 06 | `06_generated_asset_integrity.md` | 待开始 | 生成结果文件完整性校验 |
+| 06 | `06_generated_asset_integrity.md` | 已完成（0.8.12） | 生成结果文件完整性校验 |
 | 07 | `07_agent_execution_readability.md` | 待开始 | 子代理执行记录可读性 |
 | 08 | `08_storage_schema_migration.md` | 待开始 | 本地存储架构迁移校验 |
 | 09 | `09_public_export_naming.md` | 待开始 | 公共导出文件名与冲突策略 |
 | 10 | `10_history_file_repair.md` | 待开始 | 历史文件修复与清理 |
+| 11 | `11_provider_response_contract_diagnostics.md` | 待开始 | Provider 响应契约诊断 |
 
 外部账户和真机验证不会阻塞本地可实现功能；相关目标会先建立可复现的自动化契约和证据格式，再在可用环境中执行。
