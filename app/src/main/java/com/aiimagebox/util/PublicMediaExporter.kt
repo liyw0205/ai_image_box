@@ -15,7 +15,7 @@ object PublicMediaExporter {
         mimeType: String = "image/png",
     ): String {
         require(source.isFile) { "Source image does not exist: ${source.absolutePath}" }
-        val cleanName = displayName.ifBlank { source.name }
+        val cleanName = ExportFileName.unique(displayName.ifBlank { source.name })
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             exportImageScoped(context, source, cleanName, mimeType)
         } else {
@@ -30,7 +30,7 @@ object PublicMediaExporter {
         mimeType: String = "video/mp4",
     ): String {
         require(source.isFile) { "Source video does not exist: ${source.absolutePath}" }
-        val cleanName = displayName.ifBlank { source.name }
+        val cleanName = ExportFileName.unique(displayName.ifBlank { source.name })
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             exportVideoScoped(context, source, cleanName, mimeType)
         } else {

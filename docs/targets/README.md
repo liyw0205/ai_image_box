@@ -12,7 +12,7 @@
 | 06 | `06_generated_asset_integrity.md` | 已完成（0.8.12） | 生成结果文件完整性校验 |
 | 07 | `07_agent_execution_readability.md` | 已完成（0.8.13） | 子代理执行记录可读性 |
 | 08 | `08_storage_schema_migration.md` | 已完成（0.8.14） | 本地存储架构迁移校验 |
-| 09 | `09_public_export_naming.md` | 待开始 | 公共导出文件名与冲突策略 |
+| 09 | `09_public_export_naming.md` | 已完成（0.8.15） | 公共导出文件名与冲突策略 |
 | 10 | `10_history_file_repair.md` | 待开始 | 历史文件修复与清理 |
 | 11 | `11_provider_response_contract_diagnostics.md` | 待开始 | Provider 响应契约诊断 |
 | 12 | `12_history_query_boundaries.md` | 待开始 | 历史查询性能边界 |
