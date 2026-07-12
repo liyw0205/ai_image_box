@@ -101,7 +101,7 @@ Draft -> Queued -> Running -> Polling -> Downloading -> Succeeded
 
 0.7.1 已完成生图与生视频链路、AgentRegistry/AgentPipeline、四类内置代理、远端 job 恢复、ForegroundService 通知以及历史素材库核心功能：渠道管理、API Key 加密、模型拉取/筛选/类型编辑、渠道模板、快速校验、文生图、图生图参考图、OpenAI-compatible/Gemini/Agnes/Grok 图像 adapter、通用异步视频 submit/poll/download、视频结果落盘和公共 Movies 导出、同渠道和跨渠道回退、任务取消/重试/清理、重启恢复、历史缩略图、参数复用、多图落盘和公共目录导出。
 
-仍未完成：Grok/Seedance 真实接口模板回归、诊断包、配置导入导出、缓存占用统计、子代理配置 UI 和横屏 D-pad 完整回归。
+仍未完成：Grok/Seedance 真实接口模板回归、子代理配置 UI 和横屏 D-pad 完整回归。
 
 ## 非目标
 

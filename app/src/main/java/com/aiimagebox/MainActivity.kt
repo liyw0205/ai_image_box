@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.content.Intent
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
@@ -57,6 +58,8 @@ import com.aiimagebox.provider.ModelListResult
 import com.aiimagebox.provider.ProviderRegistry
 import com.aiimagebox.ui.StudioForm
 import com.aiimagebox.util.PublicMediaExporter
+import com.aiimagebox.util.ConfigTransfer
+import com.aiimagebox.util.DiagnosticsExporter
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -88,6 +91,9 @@ class MainActivity : AppCompatActivity() {
     private val referenceImagePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) importReferenceImage(uri)
     }
+    private val configImportPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) importConfig(uri)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,6 +112,8 @@ class MainActivity : AppCompatActivity() {
         wireHistoryTimeFilter()
         binding.historySearch?.doAfterTextChanged { renderHistoryPanel() }
         binding.historyClearCache?.setOnClickListener { clearGeneratedCache() }
+        binding.historyExportConfig?.setOnClickListener { exportConfig() }
+        binding.historyImportConfig?.setOnClickListener { configImportPicker.launch(arrayOf("application/json", "text/plain")) }
         observeGenerationEvents()
         restorePendingTasks()
         render(currentTab)
@@ -159,6 +167,8 @@ class MainActivity : AppCompatActivity() {
                 renderChannelList()
             } else if (currentTab == Tab.AGENTS) {
                 resetAgents()
+            } else if (currentTab == Tab.HISTORY) {
+                createDiagnostics()
             } else {
                 Toast.makeText(this, getString(R.string.toast_provider_coming), Toast.LENGTH_SHORT).show()
             }
@@ -178,8 +188,8 @@ class MainActivity : AppCompatActivity() {
         binding.body.text = getString(tab.bodyRes)
         binding.statusText.text = getString(tab.statusRes)
         binding.primaryAction.text = getString(tab.primaryActionRes)
-        binding.secondaryAction.visibility = if (tab == Tab.CHANNELS || tab == Tab.AGENTS) View.VISIBLE else View.GONE
-        binding.secondaryAction.text = getString(if (tab == Tab.AGENTS) R.string.action_reset_agents else R.string.action_refresh_channels)
+        binding.secondaryAction.visibility = if (tab == Tab.CHANNELS || tab == Tab.AGENTS || tab == Tab.HISTORY) View.VISIBLE else View.GONE
+        binding.secondaryAction.text = getString(when (tab) { Tab.AGENTS -> R.string.action_reset_agents; Tab.HISTORY -> R.string.action_diagnostics; else -> R.string.action_refresh_channels })
         binding.channelPanel.visibility = if (tab == Tab.CHANNELS) View.VISIBLE else View.GONE
         requireNotNull(binding.agentPanel).visibility = if (tab == Tab.AGENTS) View.VISIBLE else View.GONE
         binding.studioForm.visibility = if (tab == Tab.STUDIO) View.VISIBLE else View.GONE
@@ -1068,7 +1078,8 @@ class MainActivity : AppCompatActivity() {
         val allRecords = generationStore.listRecentRecords(500)
         val query = binding.historySearch?.text?.toString()?.trim().orEmpty()
         val records = allRecords.filter { historyFilter.matches(it) && historyTimeFilter.matches(it) && it.matchesHistoryQuery(query) }.take(100)
-        binding.historySummary.text = getString(R.string.history_filter_summary, records.size, allRecords.size)
+        val cacheBytes = DiagnosticsExporter.directorySize(appDirectories.cache)
+        binding.historySummary.text = getString(R.string.history_filter_summary_with_cache, records.size, allRecords.size, formatBytes(cacheBytes))
         binding.historyEmpty.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
         binding.historyList.removeAllViews()
         records.forEach { record ->
@@ -1080,6 +1091,33 @@ class MainActivity : AppCompatActivity() {
         if (query.isBlank()) return true
         return listOf(prompt, channelName, channelId, providerType, model, status.wireName)
             .any { it.contains(query, ignoreCase = true) }
+    }
+
+    private fun createDiagnostics() {
+        lifecycleScope.launch {
+            val file = withContext(Dispatchers.IO) { DiagnosticsExporter.create(appDirectories, generationStore) }
+            Toast.makeText(this@MainActivity, getString(R.string.diagnostics_created, file.absolutePath), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun exportConfig() {
+        val file = File(appDirectories.diagnostics, "config_" + System.currentTimeMillis() + ".json")
+        file.writeText(ConfigTransfer.export(channelStore, agentStore).toString(2))
+        Toast.makeText(this, getString(R.string.config_exported, file.absolutePath), Toast.LENGTH_LONG).show()
+    }
+
+    private fun importConfig(uri: Uri) {
+        lifecycleScope.launch {
+            val imported = withContext(Dispatchers.IO) {
+                val text = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: error("empty")
+                ConfigTransfer.import(JSONObject(text))
+            }
+            channelStore.save(imported.channels)
+            if (imported.agents.isNotEmpty()) agentStore.save(imported.agents)
+            bindStudioChannels()
+            Toast.makeText(this@MainActivity, getString(R.string.config_imported, imported.channels.size, imported.agents.size), Toast.LENGTH_LONG).show()
+            renderHistoryPanel()
+        }
     }
 
     private fun clearGeneratedCache() {
@@ -1318,6 +1356,17 @@ class MainActivity : AppCompatActivity() {
             .take(5)
             .joinToString("\n\n")
             .ifBlank { "-" }
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        val units = arrayOf("B", "KB", "MB", "GB")
+        var value = bytes.toDouble()
+        var index = 0
+        while (value >= 1024 && index < units.lastIndex) {
+            value = value / 1024
+            index += 1
+        }
+        return if (index == 0) bytes.toString() + " B" else "%.1f %s".format(value, units[index])
     }
 
     private fun formatDuration(durationMs: Long): String {

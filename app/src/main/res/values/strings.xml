@@ -250,4 +250,11 @@
     <string name="agent_add_title">新增子代理</string>
     <string name="agent_edit_title">编辑子代理</string>
     <string name="agent_invalid">请检查名称、类型、阶段和配置 JSON。</string>
+    <string name="action_diagnostics">生成诊断包</string>
+    <string name="action_export_config">导出配置</string>
+    <string name="action_import_config">导入配置</string>
+    <string name="diagnostics_created">诊断包已生成：%1$s</string>
+    <string name="config_exported">脱敏配置已导出：%1$s</string>
+    <string name="config_imported">已导入 %1$d 个渠道和 %2$d 个代理。渠道默认禁用，请补充 API Key 后启用。</string>
+    <string name="history_filter_summary_with_cache">显示 %1$d 条，共 %2$d 条记录；缓存占用 %3$s。</string>
 </resources>

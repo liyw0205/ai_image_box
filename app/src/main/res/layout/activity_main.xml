@@ -165,6 +165,30 @@
                     android:text="@string/action_clear_cache" />
 
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/historyExportConfig"
+                        style="@style/Widget.AIImageBox.Button.Secondary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/action_export_config" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/historyImportConfig"
+                        style="@style/Widget.AIImageBox.Button.Secondary"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="@string/action_import_config" />
+                </LinearLayout>
+
                 <TextView
                     android:id="@+id/historyEmpty"
                     android:layout_width="match_parent"
