@@ -188,6 +188,8 @@
     <string name="detail_section_response_info">响应信息</string>
     <string name="detail_section_response_data">响应数据</string>
     <string name="detail_section_response_result">响应结果</string>
+    <string name="detail_section_agent_executions">子代理执行记录
+%1$s</string>
     <string name="detail_line_prompt">提示词：%1$s</string>
     <string name="detail_line_target">目标：%1$s / %2$s</string>
     <string name="detail_line_status">状态：%1$s</string>

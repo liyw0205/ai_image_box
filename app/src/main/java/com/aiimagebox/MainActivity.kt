@@ -49,6 +49,7 @@ import com.aiimagebox.generation.AgentStage
 import com.aiimagebox.generation.GenerationAttemptSummary
 import com.aiimagebox.generation.GenerationManager
 import com.aiimagebox.generation.GeneratedAssetIntegrity
+import com.aiimagebox.util.Redaction
 import com.aiimagebox.generation.GenerationParameters
 import com.aiimagebox.generation.GenerationProviderException
 import com.aiimagebox.generation.GenerationQueueItem
@@ -1459,6 +1460,7 @@ class MainActivity : AppCompatActivity() {
             attempt?.responseJson?.ifBlank { "{}" } ?: "{}",
             getString(R.string.detail_section_response_result),
             filesSummary(assets),
+            agentExecutionText(assets),
             getString(R.string.detail_line_error, errorMessage.ifBlank { "-" }),
         ).joinToString("\n\n")
     }
@@ -1478,8 +1480,29 @@ class MainActivity : AppCompatActivity() {
             attempt?.responseJson?.ifBlank { "{}" } ?: "{}",
             getString(R.string.detail_section_response_result),
             filesSummary(assets),
+            agentExecutionText(assets),
             getString(R.string.detail_line_error, errorMessage.ifBlank { "-" }),
         ).joinToString("\n\n")
+    }
+
+    private fun agentExecutionText(assets: List<StoredGeneratedAsset>): String {
+        val raw = assets.asSequence()
+            .mapNotNull { runCatching { JSONObject(it.metadataJson).optString("agent_executions", "") }.getOrNull() }
+            .firstOrNull { it.isNotBlank() }
+            ?: return getString(R.string.detail_section_agent_executions, getString(R.string.detail_attempt_empty))
+        val executions = runCatching { JSONArray(raw) }.getOrNull()
+            ?: return getString(R.string.detail_section_agent_executions, getString(R.string.detail_attempt_empty))
+        val lines = (0 until executions.length()).mapNotNull { index ->
+            val item = executions.optJSONObject(index) ?: return@mapNotNull null
+            val name = item.optString("agent_name", item.optString("agent_type", "未知代理"))
+            val stage = item.optString("stage", "-")
+            val duration = item.optLong("duration_ms", 0L)
+            val error = Redaction.redactText(item.optString("error", "")).take(240)
+            val output = Redaction.redactText(item.optString("output", "")).take(240)
+            val status = if (error.isBlank()) "成功" else "失败"
+            "${index + 1}. $name · $stage · ${duration}ms · $status\n${if (error.isBlank()) output.ifBlank { "-" } else error}"
+        }
+        return getString(R.string.detail_section_agent_executions, lines.joinToString("\n\n").ifBlank { getString(R.string.detail_attempt_empty) })
     }
 
     private fun StoredAttemptRecord.detailText(): String {
