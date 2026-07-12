@@ -44,20 +44,23 @@ class GenerationProviderException(
 
 class ProviderRegistryGenerationExecutor(
     private val registry: ProviderRegistry = ProviderRegistry,
+    private val agentPipeline: AgentPipeline? = null,
     private val channelProvider: () -> List<ProviderChannel> = { emptyList() },
     private val jobObserver: suspend (String, com.aiimagebox.provider.ProviderJob) -> Unit = { _, _ -> },
 ) : GenerationExecutor {
     override suspend fun generate(request: GenerationRequest): GenerationResult {
-        val channel = request.target.channel
+        val pipelineBefore = agentPipeline?.before(request) ?: PipelineResult(request)
+        val effectiveRequest = pipelineBefore.request
+        val channel = effectiveRequest.target.channel
             ?: error(
                 "ProviderRegistryGenerationExecutor requires GenerationTarget.channel. " +
                     "Use GenerationTarget.fromChannel(...) or pass a custom GenerationExecutor.",
             )
-        val providerRequest = request.toProviderRequest()
+        val providerRequest = effectiveRequest.toProviderRequest()
         val attempts = mutableListOf<ProviderAttemptRecord>()
         var lastResult: ProviderGenerationResult? = null
 
-        for (fallbackTarget in request.fallbackTargetPairs(channel)) {
+        for (fallbackTarget in effectiveRequest.fallbackTargetPairs(channel)) {
             val providerChannel = fallbackTarget.channel
             val providerTarget = fallbackTarget.target
             val adapter = registry.get(providerTarget.providerType)
@@ -86,13 +89,28 @@ class ProviderRegistryGenerationExecutor(
             )
             val resultWithAttempts = providerResult.copy(attempts = attempts.toList())
             if (providerResult.status == ProviderGenerationStatus.SUCCEEDED) {
-                return resultWithAttempts.toGenerationResult(request)
+                val generated = resultWithAttempts.toGenerationResult(effectiveRequest)
+                val pipelineAfter = agentPipeline?.after(effectiveRequest, generated, pipelineBefore)
+                    ?: pipelineBefore.copy(result = generated)
+                val executionsJson = pipelineAfter.executions.toJsonArray().toString()
+                val metadata = buildMap {
+                    putAll(generated.metadata)
+                    putAll(pipelineAfter.metadata)
+                    put("agent_executions", executionsJson)
+                }
+                return GenerationResult(
+                    assets = generated.assets.map { asset ->
+                        asset.copy(metadata = buildMap { putAll(asset.metadata); putAll(metadata) })
+                    },
+                    metadata = metadata,
+                    attempts = generated.attempts,
+                )
             }
             lastResult = resultWithAttempts
         }
 
         val finalResult = lastResult ?: localFailure(
-            target = request.target.toModelTarget(channel),
+            target = effectiveRequest.target.toModelTarget(channel),
             error = "No usable provider target was available.",
         )
         throw GenerationProviderException(finalResult)
