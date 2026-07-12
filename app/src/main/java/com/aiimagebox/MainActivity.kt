@@ -85,14 +85,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         appDirectories = (application as AIImageBoxApp).appDirectories
-        channelStore = ChannelStore(appDirectories)
-        generationStore = GenerationStore(appDirectories)
-        generationManager = GenerationManager(
-            executor = ProviderRegistryGenerationExecutor(
-                channelProvider = { channelStore.load() },
-                jobObserver = { taskId, job -> persistProviderJob(taskId, job) },
-            ),
-        )
+        channelStore = (application as AIImageBoxApp).channelStore
+        generationStore = (application as AIImageBoxApp).generationStore
+        generationManager = (application as AIImageBoxApp).generationManager
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -105,7 +100,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        generationManager.close()
         super.onDestroy()
     }
 
@@ -252,18 +246,6 @@ class MainActivity : AppCompatActivity() {
                     .toString(),
             ),
         )
-    }
-
-    private fun persistProviderJob(taskId: String, job: com.aiimagebox.provider.ProviderJob) {
-        generationStore.updateTask(taskId) { task ->
-            val parameters = runCatching { JSONObject(task.parametersJson) }.getOrDefault(JSONObject())
-                .put("provider_job", JSONObject()
-                    .put("id", job.id)
-                    .put("poll_url", job.pollUrl)
-                    .put("result_url", job.resultUrl)
-                    .put("raw_preview", job.rawPreview))
-            task.copy(parametersJson = parameters.toString())
-        }
     }
 
     private fun restorePendingTasks() {

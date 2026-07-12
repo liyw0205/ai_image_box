@@ -99,9 +99,9 @@ Draft -> Queued -> Running -> Polling -> Downloading -> Succeeded
 
 ## 当前实现状态
 
-0.5.2 已完成生图主链路、生视频最小闭环、视频首帧/时长结果体验和远端 job 精确恢复：渠道管理、API Key 加密、模型拉取/筛选/类型编辑、渠道模板、快速校验、文生图、图生图参考图、OpenAI-compatible/Gemini/Agnes/Grok 图像 adapter、通用异步视频 submit/poll/download、视频结果落盘和公共 Movies 导出、同渠道和跨渠道回退、任务取消/重试/清理、重启恢复、历史缩略图、参数复用、多图落盘和公共目录导出。
+0.5.3 已完成生图主链路、生视频最小闭环、视频首帧/时长结果体验、远端 job 精确恢复和应用级后台队列：渠道管理、API Key 加密、模型拉取/筛选/类型编辑、渠道模板、快速校验、文生图、图生图参考图、OpenAI-compatible/Gemini/Agnes/Grok 图像 adapter、通用异步视频 submit/poll/download、视频结果落盘和公共 Movies 导出、同渠道和跨渠道回退、任务取消/重试/清理、重启恢复、历史缩略图、参数复用、多图落盘和公共目录导出。
 
-仍未完成：生视频前台服务常驻轮询、Grok/Seedance 真实接口模板回归、历史筛选与素材库、诊断包、配置导入导出、缓存占用统计、子代理流水线和横屏 D-pad 完整回归。
+仍未完成：系统级 ForegroundService 通知与保活、Grok/Seedance 真实接口模板回归、历史筛选与素材库、诊断包、配置导入导出、缓存占用统计、子代理流水线和横屏 D-pad 完整回归。
 
 ## 非目标
 

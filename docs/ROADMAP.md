@@ -275,6 +275,15 @@
 - 重启恢复时从 `provider_job` 还原远端任务并继续 poll/download。
 - 渠道缺失或 job URL 无效时继续按现有失败记录流程落库。
 
+## 0.5.3 应用级后台队列
+
+状态：初版已完成。GenerationManager、ChannelStore 和 GenerationStore 已提升到 Application 生命周期，Activity 销毁或屏幕旋转不再关闭运行中的生成队列；重新进入界面后继续观察同一队列和任务持久化状态。系统级 ForegroundService 通知仍待后续补充。
+
+- GenerationManager 由 `AIImageBoxApp` 单例持有。
+- Activity 不再在 `onDestroy` 取消运行中任务。
+- provider job 持久化回调移动到应用级执行器。
+- 页面重建复用相同 ChannelStore、GenerationStore 和队列。
+
 ## 0.6.0 历史与素材库
 
 状态：部分完成。历史列表、缩略图、参数复用、多图结果落盘、结果公共目录导出和任务/历史详情已经可用；筛选、素材库、批量缓存清理和大列表性能还未整理。
