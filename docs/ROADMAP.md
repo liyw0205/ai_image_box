@@ -240,26 +240,26 @@
 
 ## 0.5.0 生视频抽象
 
-状态：最小闭环已完成。已接入 `GenericAsyncVideoAdapter`，模型类型为 `openai_compatible_video`、`grok_video`、`seedance_video` 或 `generic_async_video` 时，生成执行器会按参考图有无自动切换文生视频/图生视频；adapter 支持提交、解析同步视频 URL、解析 job id、轮询、下载视频到私有 `generated_videos`，并记录 job id、poll URL、HTTP 状态、响应预览和 attempts。当前轮询仍在进程内执行，前台服务常驻轮询和视频缩略图后续补。
+状态：最小闭环已完成。已接入 `GenericAsyncVideoAdapter`，模型类型为 `openai_compatible_video`、`grok_video`、`seedance_video` 或 `generic_async_video` 时，生成执行器会按参考图有无自动切换文生视频/图生视频；adapter 支持提交、解析同步视频 URL、解析 job id、轮询、下载视频到私有 `generated_videos`，并记录 job id、poll URL、HTTP 状态、响应预览和 attempts。轮询由应用级队列执行，前台服务通知、远端 job 恢复和视频缩略图均已完成。
 
 目标：支持异步生视频。
 
 - `VideoProviderAdapter`：用 `GenericAsyncVideoAdapter` 先承载通用异步视频。
 - submit/poll/download 通用流程：已完成。
 - `ProviderJob` 持久化：job id、poll URL 进入结果 metadata 和 attempt response。
-- 轮询前台服务：未完成，后续继续稳定化。
+- 轮询前台服务：已完成，运行期间显示低打扰通知，队列空闲后自动停止。
 - 取消本地轮询：可取消当前协程任务，远端取消接口未接入。
 - 视频结果保存已完成；缩略图在 0.5.1 完成。
 
 验收：
 
 - 文生视频/图生视频任务可从 Running 进入 provider 轮询流程。
-- APP 重启后可重新提交未完成任务；精确恢复远端 job 继续轮询待后续稳定化版本。
+- APP 重启后可从持久化 job id 和 poll URL 精确恢复远端任务并继续轮询。
 - 成功后下载视频，失败后保留 job id、poll URL、响应预览和错误。
 
 ## 0.5.1 生视频结果体验
 
-状态：初版已完成。视频保存后会提取首帧缩略图、时长和画面尺寸；创作结果区和历史列表可以显示视频首帧，详情中展示视频时长。前台服务常驻轮询和远端 job 精确恢复仍留待后续版本。
+状态：初版已完成。视频保存后会提取首帧缩略图、时长和画面尺寸；创作结果区和历史列表可以显示视频首帧，详情中展示视频时长。前台服务通知和远端 job 精确恢复已在后续版本完成。
 
 - 视频首帧保存到私有 `generated_thumbnails`。
 - `MediaReference` 写入视频 `duration_ms`、宽度和高度。
@@ -277,7 +277,7 @@
 
 ## 0.5.3 应用级后台队列
 
-状态：初版已完成。GenerationManager、ChannelStore 和 GenerationStore 已提升到 Application 生命周期，Activity 销毁或屏幕旋转不再关闭运行中的生成队列；重新进入界面后继续观察同一队列和任务持久化状态。系统级 ForegroundService 通知仍待后续补充。
+状态：初版已完成。GenerationManager、ChannelStore 和 GenerationStore 已提升到 Application 生命周期，Activity 销毁或屏幕旋转不再关闭运行中的生成队列；重新进入界面后继续观察同一队列和任务持久化状态。系统级 ForegroundService 通知已在 0.5.4 完成。
 
 - GenerationManager 由 `AIImageBoxApp` 单例持有。
 - Activity 不再在 `onDestroy` 取消运行中任务。
@@ -332,12 +332,12 @@
 
 ## 0.8.0 诊断、导入导出与稳定化
 
-状态：核心功能已完成。新增脱敏诊断 ZIP、渠道与代理配置导出导入、缓存占用统计；导出配置不包含 API Key，导入渠道统一清除密钥并默认禁用，提示用户补充 Key。横屏 D-pad 真机回归仍待执行。
+状态：0.8.1 已完成公共文件导出体验。脱敏配置 JSON 和诊断 ZIP 均通过 Android 系统文件创建器保存到用户选择的位置；配置导入继续使用系统文档选择器。横屏 D-pad 真机回归仍待执行。
 
 目标：可维护、可迁移、可定位问题。
 
-- 诊断包：已完成。
-- 配置导出导入：已完成。
+- 诊断包：已完成，支持公共位置保存。
+- 配置导出导入：已完成，导入和导出均使用 SAF。
 - 请求/响应脱敏：基础 attempts 和详情已完成，诊断包导出时需要复用并补覆盖面。
 - 缓存占用统计：已完成。
 - 横屏 D-pad 回归。
@@ -350,6 +350,6 @@
 
 ## 当前下一步
 
-1. 完成 0.4.6 回归验收：本地 Termux 构建已通过，仍需真机验证渠道模板、校验按钮、批量模型类型、跨渠道 attempts、最终成功渠道落库、模型选择记忆，以及 GitHub Actions Release APK 产物。
-2. 继续补生视频稳定化：前台服务常驻轮询、Grok/Seedance 真实接口模板回归。视频缩略图和时长 UI 已在 0.5.1 完成，远端 job 精确恢复已在 0.5.2 完成。
-3. 0.6.0 先整理历史筛选和素材复用：把已完成的历史缩略图、参数复用、公共导出保留为基线，补按 provider/model/status 筛选和“结果作为参考图”。
+1. 完成 Grok/Seedance 真实接口模板和请求字段映射回归。
+2. 完成横屏布局、D-pad 焦点顺序和键盘操作回归。
+3. 执行渠道模板、跨渠道 attempts、模型选择记忆及 GitHub Actions Release APK 的真机与发布验收。

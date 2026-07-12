@@ -18,11 +18,11 @@
 
     <string name="tasks_headline">任务队列会承载长生图和异步生视频</string>
     <string name="tasks_body">队列会记录 Queued、Running、Polling、Downloading、Succeeded、Failed 和 Canceled 状态，并支持重试、取消和错误复现。</string>
-    <string name="tasks_status">已接入 GenerationManager、取消、重试、清理已完成、重启恢复和通用异步视频轮询；后续补前台服务常驻轮询。</string>
+    <string name="tasks_status">已接入应用级 GenerationManager、取消、重试、清理、重启恢复、远端视频续轮询和前台服务通知。</string>
 
     <string name="history_headline">历史记录用于复用参数和追踪接口表现</string>
     <string name="history_body">每次生成都会保存 provider、model、耗时、请求摘要、响应预览、本地结果文件和 attempts，方便复用和诊断。</string>
-    <string name="history_status">历史使用本地 JSONL 文件，已支持缩略图、详情、参数复用和公共目录导出；后续补筛选、素材库和缓存统计。</string>
+    <string name="history_status">历史使用本地 JSONL 文件，支持筛选、搜索、缩略图、素材详情、参数复用、公共目录导出和缓存统计。</string>
 
     <string name="channels_headline">渠道管理是多模型能力的核心</string>
     <string name="channels_body">这里可配置 OpenAI-compatible、Gemini、Agnes、Grok 和后续异步视频 provider。API Key 将保存在本机加密存储，导出配置默认脱敏。</string>
@@ -255,6 +255,9 @@
     <string name="action_import_config">导入配置</string>
     <string name="diagnostics_created">诊断包已生成：%1$s</string>
     <string name="config_exported">脱敏配置已导出：%1$s</string>
+    <string name="diagnostics_exported_public">诊断包已保存到所选位置。</string>
+    <string name="config_exported_public">脱敏配置已保存到所选位置。</string>
+    <string name="file_export_failed">文件保存失败，请重新选择位置。</string>
     <string name="config_imported">已导入 %1$d 个渠道和 %2$d 个代理。渠道默认禁用，请补充 API Key 后启用。</string>
     <string name="history_filter_summary_with_cache">显示 %1$d 条，共 %2$d 条记录；缓存占用 %3$s。</string>
 </resources>

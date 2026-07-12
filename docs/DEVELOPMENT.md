@@ -28,7 +28,7 @@
 | JDK | 17 |
 | 并发 | Kotlin Coroutines |
 | 网络 | OkHttp |
-| 本地文件 | 应用私有目录 + SAF 导出 |
+| 本地文件 | 应用私有目录 + MediaStore 结果导出 + SAF 配置/诊断导入导出 |
 | 任务后台 | 当前生图和生视频队列由 Application 生命周期持有；已接入 ForegroundService 通知和系统级任务保活，可再补 WorkManager |
 
 建议包名：
@@ -120,7 +120,7 @@ files/ai_image_box/
 API Key 不明文写进可导出的 JSON：
 
 - 本机保存：Android Keystore 加密。
-- 导出配置：默认脱敏，仅保留渠道名、provider、base URL、模型和非敏感参数。
+- 导出配置：默认脱敏，仅保留渠道名、provider、base URL、模型和非敏感参数，通过系统文件创建器保存到用户选择的位置。
 - 诊断包：必须走脱敏工具，不能包含 API Key、Authorization、Cookie。
 
 ## Provider 抽象
@@ -180,7 +180,7 @@ PromptInput
 - 单文件下载上限：默认 100 MB，可配置。
 - 自动回退：按模型优先级轮询 provider。
 - 失败策略：保留最后错误和每次尝试摘要。
-- 视频异步任务：已接入进程内 submit/poll/download 最小闭环，轮询间隔和最大轮询次数可通过渠道扩展 JSON 配置；前台服务常驻轮询后续补。
+- 视频异步任务：已接入进程内 submit/poll/download 最小闭环，轮询间隔和最大轮询次数可通过渠道扩展 JSON 配置；远端 job 持久化后由应用级队列续轮询，并由前台服务维持任务通知。
 
 注意：这些是稳定性保护，不是 token 或额度限制。
 

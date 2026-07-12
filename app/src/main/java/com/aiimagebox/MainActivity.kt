@@ -86,6 +86,7 @@ class MainActivity : AppCompatActivity() {
     private var syncingNav = false
     private var latestResultPaths: List<String> = emptyList()
     private var pendingPublicExportPaths: List<String> = emptyList()
+    private var pendingDiagnosticsFile: File? = null
     private var historyFilter = HistoryFilter.ALL
     private var historyTimeFilter = HistoryTimeFilter.ALL
     private val referenceImagePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -93,6 +94,14 @@ class MainActivity : AppCompatActivity() {
     }
     private val configImportPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importConfig(uri)
+    }
+    private val configExportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) writeConfigExport(uri)
+    }
+    private val diagnosticsExportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        val file = pendingDiagnosticsFile
+        pendingDiagnosticsFile = null
+        if (uri != null && file != null) writeDiagnosticsExport(uri, file)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1096,14 +1105,39 @@ class MainActivity : AppCompatActivity() {
     private fun createDiagnostics() {
         lifecycleScope.launch {
             val file = withContext(Dispatchers.IO) { DiagnosticsExporter.create(appDirectories, generationStore) }
-            Toast.makeText(this@MainActivity, getString(R.string.diagnostics_created, file.absolutePath), Toast.LENGTH_LONG).show()
+            pendingDiagnosticsFile = file
+            diagnosticsExportPicker.launch(file.name)
         }
     }
 
     private fun exportConfig() {
-        val file = File(appDirectories.diagnostics, "config_" + System.currentTimeMillis() + ".json")
-        file.writeText(ConfigTransfer.export(channelStore, agentStore).toString(2))
-        Toast.makeText(this, getString(R.string.config_exported, file.absolutePath), Toast.LENGTH_LONG).show()
+        configExportPicker.launch("ai_image_box_config_${System.currentTimeMillis()}.json")
+    }
+
+    private fun writeConfigExport(uri: Uri) {
+        lifecycleScope.launch {
+            val succeeded = withContext(Dispatchers.IO) {
+                runCatching {
+                    contentResolver.openOutputStream(uri, "wt")?.bufferedWriter()?.use { writer ->
+                        writer.write(ConfigTransfer.export(channelStore, agentStore).toString(2))
+                    } ?: error("Unable to open export destination")
+                }.isSuccess
+            }
+            Toast.makeText(this@MainActivity, if (succeeded) R.string.config_exported_public else R.string.file_export_failed, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun writeDiagnosticsExport(uri: Uri, file: File) {
+        lifecycleScope.launch {
+            val succeeded = withContext(Dispatchers.IO) {
+                runCatching {
+                    contentResolver.openOutputStream(uri, "w")?.use { output ->
+                        file.inputStream().use { input -> input.copyTo(output) }
+                    } ?: error("Unable to open export destination")
+                }.isSuccess
+            }
+            Toast.makeText(this@MainActivity, if (succeeded) R.string.diagnostics_exported_public else R.string.file_export_failed, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun importConfig(uri: Uri) {
