@@ -88,6 +88,18 @@ class GenericAsyncVideoAdapter(
         }
 
         val extra = channel.extraObject()
+        val resumeJob = request.resumeJob
+        if (resumeJob != null) {
+            val job = resumeJob
+            request.onJobUpdated(job)
+            val pollHost = job.pollUrl.toHttpUrlOrNull()?.host
+                ?: target.baseUrl.ifBlank { channel.baseUrl }.toHttpUrlOrNull()?.host
+                ?: return@withContext failedResult(channel, target, "Invalid video poll URL for job " + job.id + ".", startedAt)
+            return@withContext pollUntilComplete(
+                channel, target, request, clientFor(target.timeoutSeconds, target.proxy), apiKey, pollHost,
+                job, startedAt, 200, job.id, job.rawPreview,
+            )
+        }
         val submitPath = request.extra.optString("submit_path", "")
             .ifBlank { extra.optString("video_submit_path", "") }
             .ifBlank { "/v1/videos/generations" }
@@ -143,6 +155,7 @@ class GenericAsyncVideoAdapter(
                         requestId = submitRequestId,
                         rawPreview = preview,
                     )
+                request.onJobUpdated(job)
                 pollUntilComplete(channel, target, request, client, apiKey, submitUrl.host, job, startedAt, response.code, submitRequestId, preview)
             }
         }.getOrElse { error ->
@@ -262,6 +275,7 @@ class GenericAsyncVideoAdapter(
                     )
                 }
                 job = parseJob(bodyText, pollUrl, extra) ?: job.copy(rawPreview = lastPreview)
+                request.onJobUpdated(job)
             }
         }
         return failedResult(channel, target, "Video job polling timed out: ${initialJob.id}", startedAt, lastHttpStatus, lastRequestId, lastPreview, job)

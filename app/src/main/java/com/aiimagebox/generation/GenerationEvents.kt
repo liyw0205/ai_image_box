@@ -58,6 +58,7 @@ data class GenerationParameters(
     val responseFormat: String = "b64_json",
     val referenceImagePaths: List<String> = emptyList(),
     val extra: Map<String, Any?> = emptyMap(),
+    val resumeJob: com.aiimagebox.provider.ProviderJob? = null,
 )
 
 data class GenerationRequest(

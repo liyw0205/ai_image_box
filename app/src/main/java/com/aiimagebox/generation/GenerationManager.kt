@@ -45,6 +45,7 @@ class GenerationProviderException(
 class ProviderRegistryGenerationExecutor(
     private val registry: ProviderRegistry = ProviderRegistry,
     private val channelProvider: () -> List<ProviderChannel> = { emptyList() },
+    private val jobObserver: suspend (String, com.aiimagebox.provider.ProviderJob) -> Unit = { _, _ -> },
 ) : GenerationExecutor {
     override suspend fun generate(request: GenerationRequest): GenerationResult {
         val channel = request.target.channel
@@ -130,6 +131,8 @@ class ProviderRegistryGenerationExecutor(
                 )
             },
             extra = parameters.toExtraJson(),
+            resumeJob = parameters.resumeJob,
+            onJobUpdated = { job -> jobObserver(id, job) },
         )
     }
 

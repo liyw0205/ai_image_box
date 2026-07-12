@@ -41,6 +41,8 @@ data class GenerationRequest(
     val seed: Long? = null,
     val references: List<MediaReference> = emptyList(),
     val extra: JSONObject = JSONObject(),
+    val resumeJob: ProviderJob? = null,
+    val onJobUpdated: suspend (ProviderJob) -> Unit = {},
 )
 
 enum class GeneratedAssetSource {

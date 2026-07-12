@@ -4,7 +4,7 @@ AI Image Box 是一个 Android 原生 APP，用于统一管理多接口生图和
 
 当前仓库已进入功能迭代阶段，开发文档按当前代码状态维护，作为后续开发和验收基线。
 
-当前开发基线：`0.5.1` Android 原生多图像 provider 和通用异步视频 provider，包含生视频 submit/poll/download 最小闭环、视频结果落盘和公共 Movies 导出、视频 job/轮询详情记录、渠道模板、API Key 快速校验、模型类型批量修改、跨渠道自动回退、创作页渠道/模型选择记忆、GitHub Actions 打包 APK 并发布到 Releases、参考 Neribox UI 的浅灰蓝配色、参考图参数落库和详情复用、卡片式提示词预设、预设使用/编辑、OpenAI-compatible、Gemini、Agnes、Grok 图像适配器、attempts 记录、自定义预设、创作表单模型选择弹窗、可选参考图、多图预览、公共目录导出、任务队列取消/重试/清理、重启恢复、请求/响应详情、常见 provider 错误中文化、历史缩略图、参数复用、多图结果落盘、基础渠道管理、扩展 JSON 可视化/JSON 切换、已配置模型类型可视化编辑、上游模型拉取/筛选/保存、模型类型推断与手动修改、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
+当前开发基线：`0.5.2` Android 原生多图像 provider 和通用异步视频 provider，包含生视频 submit/poll/download 最小闭环和远端 job 重启续轮询、视频结果落盘和公共 Movies 导出、视频 job/轮询详情记录、渠道模板、API Key 快速校验、模型类型批量修改、跨渠道自动回退、创作页渠道/模型选择记忆、GitHub Actions 打包 APK 并发布到 Releases、参考 Neribox UI 的浅灰蓝配色、参考图参数落库和详情复用、卡片式提示词预设、预设使用/编辑、OpenAI-compatible、Gemini、Agnes、Grok 图像适配器、attempts 记录、自定义预设、创作表单模型选择弹窗、可选参考图、多图预览、公共目录导出、任务队列取消/重试/清理、重启恢复、请求/响应详情、常见 provider 错误中文化、历史缩略图、参数复用、多图结果落盘、基础渠道管理、扩展 JSON 可视化/JSON 切换、已配置模型类型可视化编辑、上游模型拉取/筛选/保存、模型类型推断与手动修改、API Key 加密保存、Termux 打包脚本和 logcat 脚本。
 
 ## 文档入口
 
@@ -37,7 +37,7 @@ bash pack_ai_image_box.sh
 产物：
 
 ```text
-../AIImageBox_0.5.1_debug.apk
+../AIImageBox_0.5.2_debug.apk
 ```
 
 ## GitHub Release 打包

@@ -88,7 +88,10 @@ class MainActivity : AppCompatActivity() {
         channelStore = ChannelStore(appDirectories)
         generationStore = GenerationStore(appDirectories)
         generationManager = GenerationManager(
-            executor = ProviderRegistryGenerationExecutor(channelProvider = { channelStore.load() }),
+            executor = ProviderRegistryGenerationExecutor(
+                channelProvider = { channelStore.load() },
+                jobObserver = { taskId, job -> persistProviderJob(taskId, job) },
+            ),
         )
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -251,6 +254,18 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    private fun persistProviderJob(taskId: String, job: com.aiimagebox.provider.ProviderJob) {
+        generationStore.updateTask(taskId) { task ->
+            val parameters = runCatching { JSONObject(task.parametersJson) }.getOrDefault(JSONObject())
+                .put("provider_job", JSONObject()
+                    .put("id", job.id)
+                    .put("poll_url", job.pollUrl)
+                    .put("result_url", job.resultUrl)
+                    .put("raw_preview", job.rawPreview))
+            task.copy(parametersJson = parameters.toString())
+        }
+    }
+
     private fun restorePendingTasks() {
         val channelsById = channelStore.load().associateBy { it.id }
         var restoredCount = 0
@@ -309,6 +324,15 @@ class MainActivity : AppCompatActivity() {
                 durationSeconds = parameters.optInt("duration_seconds", 0).takeIf { it > 0 },
                 responseFormat = "b64_json",
                 referenceImagePaths = references,
+                resumeJob = parameters.optJSONObject("provider_job")?.let { job ->
+                    val id = job.optString("id", "").trim()
+                    if (id.isBlank()) null else com.aiimagebox.provider.ProviderJob(
+                        id = id,
+                        pollUrl = job.optString("poll_url", ""),
+                        resultUrl = job.optString("result_url", ""),
+                        rawPreview = job.optString("raw_preview", ""),
+                    )
+                },
             ),
             createdAtMillis = createdAt,
         )
