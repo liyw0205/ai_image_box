@@ -32,11 +32,13 @@
     <style name="Widget.AIImageBox.DialogButton" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
         <item name="android:textColor">@color/aib_primary_dark</item>
         <item name="android:textAllCaps">false</item>
+        <item name="android:defaultFocusHighlightEnabled">true</item>
     </style>
 
     <style name="Widget.AIImageBox.Button" parent="Widget.MaterialComponents.Button">
         <item name="cornerRadius">8dp</item>
         <item name="android:textAllCaps">false</item>
+        <item name="android:defaultFocusHighlightEnabled">true</item>
     </style>
 
     <style name="Widget.AIImageBox.Button.Secondary" parent="Widget.MaterialComponents.Button.OutlinedButton">
@@ -44,5 +46,6 @@
         <item name="strokeColor">@color/aib_line</item>
         <item name="android:textColor">@color/aib_text</item>
         <item name="android:textAllCaps">false</item>
+        <item name="android:defaultFocusHighlightEnabled">true</item>
     </style>
 </resources>

@@ -22,6 +22,7 @@
         app:menu="@menu/main_nav" />
 
     <ScrollView
+        android:id="@+id/mainScroll"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:fillViewport="true"
@@ -336,6 +337,7 @@
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomNav"
+        android:focusable="true"
         android:layout_width="match_parent"
         android:layout_height="64dp"
         android:background="@color/aib_surface"

@@ -8,6 +8,8 @@
 
     <com.google.android.material.navigationrail.NavigationRailView
         android:id="@+id/navRail"
+        android:focusable="true"
+        android:nextFocusRight="@id/primaryAction"
         android:layout_width="88dp"
         android:layout_height="match_parent"
         android:background="@color/aib_surface"
@@ -31,6 +33,7 @@
             app:titleTextColor="@color/aib_text" />
 
         <ScrollView
+            android:id="@+id/mainScroll"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:fillViewport="true"

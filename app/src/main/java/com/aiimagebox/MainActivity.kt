@@ -15,6 +15,7 @@ import android.text.InputType
 import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
@@ -89,6 +90,11 @@ class MainActivity : AppCompatActivity() {
     private var pendingDiagnosticsFile: File? = null
     private var historyFilter = HistoryFilter.ALL
     private var historyTimeFilter = HistoryTimeFilter.ALL
+    private val globalFocusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, focused ->
+        if (focused != null && focused.isDescendantOf(binding.mainScroll)) {
+            binding.mainScroll.requestChildFocus(focused, focused)
+        }
+    }
     private val referenceImagePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) importReferenceImage(uri)
     }
@@ -116,6 +122,7 @@ class MainActivity : AppCompatActivity() {
 
         currentTab = Tab.fromId(savedInstanceState?.getInt(KEY_TAB) ?: R.id.nav_studio)
         wireNavigation()
+        wireDpadNavigation()
         wireStudioForm()
         wireHistoryFilter()
         wireHistoryTimeFilter()
@@ -129,6 +136,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        binding.root.viewTreeObserver.removeOnGlobalFocusChangeListener(globalFocusListener)
         super.onDestroy()
     }
 
@@ -151,6 +159,28 @@ class MainActivity : AppCompatActivity() {
             exportPathsToPublic(pendingPaths)
         } else {
             Toast.makeText(this, R.string.export_permission_denied, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun View.isDescendantOf(parent: ViewGroup): Boolean {
+        var current = this.parent
+        while (current is View) {
+            if (current === parent) return true
+            current = current.parent
+        }
+        return false
+    }
+
+    private fun wireDpadNavigation() {
+        binding.root.viewTreeObserver.addOnGlobalFocusChangeListener(globalFocusListener)
+        binding.navRail.nextFocusRightId = R.id.primaryAction
+        binding.primaryAction.nextFocusLeftId = R.id.navRail
+        binding.secondaryAction.nextFocusLeftId = R.id.navRail
+        if (!binding.root.isInTouchMode) {
+            binding.root.post {
+                val navigation = if (binding.navRail.visibility == View.VISIBLE) binding.navRail else binding.bottomNav
+                navigation.requestFocus()
+            }
         }
     }
 
