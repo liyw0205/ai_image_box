@@ -180,7 +180,7 @@ PromptInput
 - 单文件下载上限：默认 100 MB，可配置。
 - 自动回退：按模型优先级轮询 provider。
 - 失败策略：保留最后错误和每次尝试摘要。
-- 视频异步任务：已接入进程内 submit/poll/download 最小闭环，轮询间隔和最大轮询次数可通过渠道扩展 JSON 配置；远端 job 持久化后由应用级队列续轮询，并由前台服务维持任务通知。
+- 视频异步任务：已接入应用级 submit/poll/download 闭环、远端 job 恢复和前台服务通知；内置 Grok 通用 JSON 与 Seedance `content` 请求映射，接口路径可由渠道扩展 JSON 覆盖。
 
 注意：这些是稳定性保护，不是 token 或额度限制。
 

@@ -108,7 +108,7 @@ class GenericAsyncVideoAdapter(
         val client = clientFor(target.timeoutSeconds, target.proxy)
         val httpRequest = Request.Builder()
             .url(submitUrl)
-            .post(videoPayload(request, target.model).toString().toRequestBody(JSON_MEDIA_TYPE))
+            .post(videoPayload(request, target.model, extra).toString().toRequestBody(JSON_MEDIA_TYPE))
             .header("Accept", "application/json")
             .applyAuth(apiKey)
             .build()
@@ -281,27 +281,12 @@ class GenericAsyncVideoAdapter(
         return failedResult(channel, target, "Video job polling timed out: ${initialJob.id}", startedAt, lastHttpStatus, lastRequestId, lastPreview, job)
     }
 
-    private fun videoPayload(request: GenerationRequest, model: String): JSONObject {
-        val payload = JSONObject()
-            .put("model", model)
-            .put("prompt", request.prompt)
-            .put("n", request.count.coerceIn(1, 4))
-            .put("aspect_ratio", request.aspectRatio.ifBlank { "1:1" })
-            .put("resolution", request.resolution.ifBlank { "720p" })
-        request.durationSeconds?.let { payload.put("duration", it) }
-        if (request.negativePrompt.isNotBlank()) payload.put("negative_prompt", request.negativePrompt)
-        request.references.firstOrNull()?.let { reference ->
-            val mime = reference.mimeType.ifBlank { "image/png" }
-            val encoded = android.util.Base64.encodeToString(reference.bytes, android.util.Base64.NO_WRAP)
-            payload.put("image", "data:$mime;base64,$encoded")
-        }
-        val keys = request.extra.keys()
-        val internalKeys = setOf("submit_path", "max_polls", "poll_interval_ms", "mode")
-        while (keys.hasNext()) {
-            val key = keys.next()
-            if (key !in internalKeys) payload.put(key, request.extra.opt(key))
-        }
-        return payload
+    private fun videoPayload(request: GenerationRequest, model: String, extra: JSONObject): JSONObject {
+        return VideoRequestMapper.payload(
+            profile = request.extra.optString("video_provider", extra.optString("video_provider", "")),
+            model = model,
+            request = request,
+        )
     }
 
     private fun parseJob(raw: String, currentUrl: HttpUrl, extra: JSONObject): ProviderJob? {

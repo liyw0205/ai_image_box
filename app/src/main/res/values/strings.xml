@@ -81,6 +81,8 @@
     <string name="channel_template_gemini">Gemini</string>
     <string name="channel_template_grok">Grok</string>
     <string name="channel_template_agnes">Agnes</string>
+    <string name="channel_template_grok_video">Grok 视频</string>
+    <string name="channel_template_seedance">Seedance</string>
 
     <string name="action_save">保存</string>
     <string name="action_validate_channel">校验</string>

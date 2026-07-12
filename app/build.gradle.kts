@@ -11,8 +11,8 @@ android {
         applicationId = "com.aiimagebox"
         minSdk = 26
         targetSdk = 34
-        versionCode = 32
-        versionName = "0.8.1"
+        versionCode = 33
+        versionName = "0.8.2"
     }
 
     buildTypes {
@@ -48,4 +48,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

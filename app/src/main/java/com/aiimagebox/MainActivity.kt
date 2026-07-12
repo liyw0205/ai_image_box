@@ -2113,6 +2113,28 @@ class MainActivity : AppCompatActivity() {
                 modelType = "grok_image",
             ),
             ChannelTemplate(
+                labelRes = R.string.channel_template_grok_video,
+                name = "Grok Video",
+                baseUrl = "https://api.x.ai",
+                models = listOf("grok-imagine-video"),
+                modelType = "grok_video",
+                extra = JSONObject()
+                    .put("video_provider", "grok")
+                    .put("video_submit_path", "/v1/videos/generations")
+                    .put("video_poll_path_template", "/v1/videos/generations/{id}"),
+            ),
+            ChannelTemplate(
+                labelRes = R.string.channel_template_seedance,
+                name = "Seedance",
+                baseUrl = "https://ark.cn-beijing.volces.com",
+                models = listOf("seedance-1-0-pro-250528"),
+                modelType = "seedance_video",
+                extra = JSONObject()
+                    .put("video_provider", "seedance")
+                    .put("video_submit_path", "/api/v3/contents/generations/tasks")
+                    .put("video_poll_path_template", "/api/v3/contents/generations/tasks/{id}"),
+            ),
+            ChannelTemplate(
                 labelRes = R.string.channel_template_agnes,
                 name = "Agnes",
                 baseUrl = "https://apihub.agnes-ai.com",
@@ -2148,7 +2170,9 @@ class MainActivity : AppCompatActivity() {
         baseUrl.setText(template.baseUrl)
         enabledModels.setText(template.models.joinToString(", "))
         val modelTypes = template.models.associateWith { template.modelType }
-        extra.setText(withModelTypes(extra.text?.toString().orEmpty().ifBlank { "{}" }, template.models, modelTypes))
+        val configured = JSONObject(extra.text?.toString().orEmpty().ifBlank { "{}" })
+        template.extra.keys().forEach { key -> configured.put(key, template.extra.opt(key)) }
+        extra.setText(withModelTypes(configured.toString(), template.models, modelTypes))
         refreshVisual()
         Toast.makeText(this, getString(R.string.channel_template_applied, getString(template.labelRes)), Toast.LENGTH_SHORT).show()
     }
@@ -2585,5 +2609,6 @@ class MainActivity : AppCompatActivity() {
         val baseUrl: String,
         val models: List<String>,
         val modelType: String,
+        val extra: JSONObject = JSONObject(),
     )
 }
