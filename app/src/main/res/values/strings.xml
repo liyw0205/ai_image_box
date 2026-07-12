@@ -188,4 +188,14 @@
     <string name="generation_notification_channel">生成任务</string>
     <string name="generation_notification_title">AI Image Box 正在生成</string>
     <string name="generation_notification_progress">排队 %1$d，运行 %2$d</string>
+    <string name="history_filter_hint">筛选历史</string>
+    <string name="history_filter_all">全部</string>
+    <string name="history_filter_image">图片</string>
+    <string name="history_filter_video">视频</string>
+    <string name="history_filter_succeeded">成功</string>
+    <string name="history_filter_failed">失败</string>
+    <string name="history_filter_summary">显示 %1$d 条，共 %2$d 条生成记录。</string>
+    <string name="action_use_as_reference">作为参考图</string>
+    <string name="history_reference_missing">该记录没有可用的本地图片结果。</string>
+    <string name="history_reference_applied">已将任务 %1 的结果设为参考图。</string>
 </resources>

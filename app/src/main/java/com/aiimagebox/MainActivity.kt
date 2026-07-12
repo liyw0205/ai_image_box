@@ -78,6 +78,7 @@ class MainActivity : AppCompatActivity() {
     private var syncingNav = false
     private var latestResultPaths: List<String> = emptyList()
     private var pendingPublicExportPaths: List<String> = emptyList()
+    private var historyFilter = HistoryFilter.ALL
     private val referenceImagePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) importReferenceImage(uri)
     }
@@ -94,6 +95,7 @@ class MainActivity : AppCompatActivity() {
         currentTab = Tab.fromId(savedInstanceState?.getInt(KEY_TAB) ?: R.id.nav_studio)
         wireNavigation()
         wireStudioForm()
+        wireHistoryFilter()
         observeGenerationEvents()
         restorePendingTasks()
         render(currentTab)
@@ -909,9 +911,21 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun wireHistoryFilter() {
+        val filters = HistoryFilter.values()
+        val filterView = requireNotNull(binding.historyFilter)
+        filterView.setSimpleItems(filters.map { getString(it.labelRes) }.toTypedArray())
+        filterView.setText(getString(historyFilter.labelRes), false)
+        filterView.setOnItemClickListener { _, _, position, _ ->
+            historyFilter = filters.getOrElse(position) { HistoryFilter.ALL }
+            renderHistoryPanel()
+        }
+    }
+
     private fun renderHistoryPanel() {
-        val records = generationStore.listRecentRecords(20)
-        binding.historySummary.text = getString(R.string.history_summary, records.size)
+        val allRecords = generationStore.listRecentRecords(500)
+        val records = allRecords.filter { historyFilter.matches(it) }.take(100)
+        binding.historySummary.text = getString(R.string.history_filter_summary, records.size, allRecords.size)
         binding.historyEmpty.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
         binding.historyList.removeAllViews()
         records.forEach { record ->
@@ -963,6 +977,7 @@ class MainActivity : AppCompatActivity() {
             actionGrid(
                 listOf(
                     UiAction(R.string.action_reuse_parameters) { reuseHistoryRecord(record) },
+                    UiAction(R.string.action_use_as_reference) { useRecordAsReference(record) },
                     UiAction(R.string.action_save_public) { exportRecordAssets(record) },
                     UiAction(R.string.action_view_detail) { showHistoryDetails(record) },
                 ),
@@ -1007,6 +1022,19 @@ class MainActivity : AppCompatActivity() {
             draftReferenceImagePath = parameters.optJSONArray("reference_images")?.optString(0, "").orEmpty(),
         )
         binding.studioForm.setStatus(getString(R.string.history_reuse_applied, record.taskId.take(8)))
+    }
+
+    private fun useRecordAsReference(record: GenerationRecord) {
+        val imagePath = record.assets.firstOrNull { asset ->
+            asset.mode == StoredGenerationMode.IMAGE && File(asset.media.filePath).isFile
+        }?.media?.filePath
+        if (imagePath.isNullOrBlank()) {
+            Toast.makeText(this, R.string.history_reference_missing, Toast.LENGTH_SHORT).show()
+            return
+        }
+        reuseHistoryRecord(record)
+        binding.studioForm.setReferenceImage(imagePath)
+        binding.studioForm.setStatus(getString(R.string.history_reference_applied, record.taskId.take(8)))
     }
 
     private fun showHistoryDetails(record: GenerationRecord) {
@@ -2166,6 +2194,22 @@ class MainActivity : AppCompatActivity() {
     private fun color(resId: Int): Int = ContextCompat.getColor(this, resId)
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
+
+    private enum class HistoryFilter(val labelRes: Int) {
+        ALL(R.string.history_filter_all),
+        IMAGE(R.string.history_filter_image),
+        VIDEO(R.string.history_filter_video),
+        SUCCEEDED(R.string.history_filter_succeeded),
+        FAILED(R.string.history_filter_failed);
+
+        fun matches(record: GenerationRecord): Boolean = when (this) {
+            ALL -> true
+            IMAGE -> record.mode == StoredGenerationMode.IMAGE
+            VIDEO -> record.mode == StoredGenerationMode.VIDEO
+            SUCCEEDED -> record.status == StoredGenerationStatus.SUCCEEDED
+            FAILED -> record.status == StoredGenerationStatus.FAILED
+        }
+    }
 
     private enum class Tab(
         val itemId: Int,
