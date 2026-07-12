@@ -198,4 +198,8 @@
     <string name="action_use_as_reference">作为参考图</string>
     <string name="history_reference_missing">该记录没有可用的本地图片结果。</string>
     <string name="history_reference_applied">已将任务 %1 的结果设为参考图。</string>
+    <string name="history_search_hint">搜索 provider、模型或提示词</string>
+    <string name="action_clear_cache">清理生成缓存</string>
+    <string name="cache_clear_done">已清理 %1 个缓存文件，配置和历史记录未删除。</string>
+    <string name="history_file_missing">本地结果文件已缺失</string>
 </resources>

@@ -25,6 +25,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import com.aiimagebox.databinding.ActivityMainBinding
 import com.aiimagebox.data.AppDirectories
@@ -96,6 +97,8 @@ class MainActivity : AppCompatActivity() {
         wireNavigation()
         wireStudioForm()
         wireHistoryFilter()
+        binding.historySearch?.doAfterTextChanged { renderHistoryPanel() }
+        binding.historyClearCache?.setOnClickListener { clearGeneratedCache() }
         observeGenerationEvents()
         restorePendingTasks()
         render(currentTab)
@@ -924,13 +927,33 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderHistoryPanel() {
         val allRecords = generationStore.listRecentRecords(500)
-        val records = allRecords.filter { historyFilter.matches(it) }.take(100)
+        val query = binding.historySearch?.text?.toString()?.trim().orEmpty()
+        val records = allRecords.filter { historyFilter.matches(it) && it.matchesHistoryQuery(query) }.take(100)
         binding.historySummary.text = getString(R.string.history_filter_summary, records.size, allRecords.size)
         binding.historyEmpty.visibility = if (records.isEmpty()) View.VISIBLE else View.GONE
         binding.historyList.removeAllViews()
         records.forEach { record ->
             binding.historyList.addView(historyCard(record))
         }
+    }
+
+    private fun GenerationRecord.matchesHistoryQuery(query: String): Boolean {
+        if (query.isBlank()) return true
+        return listOf(prompt, channelName, channelId, providerType, model, status.wireName)
+            .any { it.contains(query, ignoreCase = true) }
+    }
+
+    private fun clearGeneratedCache() {
+        val files = listOf(
+            appDirectories.generatedImages,
+            appDirectories.generatedVideos,
+            appDirectories.generatedThumbnails,
+            appDirectories.responseBodies,
+        ).flatMap { directory -> directory.listFiles()?.toList().orEmpty() }
+        val deleted = files.count { it.isFile && it.delete() }
+        latestResultPaths = latestResultPaths.filter { File(it).isFile }
+        Toast.makeText(this, getString(R.string.cache_clear_done, deleted), Toast.LENGTH_SHORT).show()
+        renderHistoryPanel()
     }
 
     private fun historyCard(record: GenerationRecord): View {
@@ -967,7 +990,13 @@ class MainActivity : AppCompatActivity() {
                 record.status.wireName,
                 record.assets.size,
                 filePath,
-                record.errorMessage.ifBlank { "-" },
+                record.errorMessage.ifBlank {
+                    if (record.assets.any { !File(it.media.filePath).isFile }) {
+                        getString(R.string.history_file_missing)
+                    } else {
+                        "-"
+                    }
+                },
             )
             setTextColor(color(R.color.aib_text_secondary))
             textSize = 14f
